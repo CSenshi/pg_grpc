@@ -1,0 +1,6 @@
+comment = 'pg_grpc:  Created by pgrx'
+default_version = '@CARGO_VERSION@'
+module_pathname = 'pg_grpc'
+relocatable = false
+superuser = true
+trusted = false
