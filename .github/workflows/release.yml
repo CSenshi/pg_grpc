@@ -14,31 +14,8 @@ permissions:
   id-token: write
 
 jobs:
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          body: |
-            Changes in this Release
-            - First Change
-            - Second Change
-          draft: false
-          prerelease: false
-
   build-linux-gnu:
     name: release artifacts
-    needs:
-      - release
     strategy:
       matrix:
         extension_name:
@@ -47,7 +24,7 @@ jobs:
           - pg-grpc
         pgrx_version:
           - 0.17.0
-        postgres: [13, 14, 15, 16, 17, 18]
+        postgres: [18]
         box:
           - { runner: ubuntu-latest, arch: amd64 }
           - { runner: u22-arm-runner, arch: arm64 }
@@ -136,15 +113,13 @@ jobs:
           sudo chmod -R 00755 ${package_dir}
           sudo dpkg-deb --build --root-owner-group ${package_dir}
 
-      - name: Get upload url
-        run: echo UPLOAD_URL=$(curl --silent https://api.github.com/repos/${{ github.repository }}/releases/latest | jq .upload_url --raw-output) >> $GITHUB_ENV
-
       - name: Upload release asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ env.UPLOAD_URL }}
-          asset_path: ./${{ matrix.extension_name }}-${{ github.ref_name }}-pg${{ matrix.postgres }}-${{ matrix.box.arch }}-linux-gnu.deb
-          asset_name: ${{ matrix.extension_name }}-${{ github.ref_name }}-pg${{ matrix.postgres }}-${{ matrix.box.arch }}-linux-gnu.deb
-          asset_content_type: application/vnd.debian.binary-package
+          body: |
+            Changes in this Release
+            - First Change
+            - Second Change
+          draft: false
+          prerelease: false
+          files: ./${{ matrix.extension_name }}-${{ github.ref_name }}-pg${{ matrix.postgres }}-${{ matrix.box.arch }}-linux-gnu.deb
