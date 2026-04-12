@@ -33,9 +33,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: build release artifacts
+      - name: Install system dependencies
         run: |
-          # Install wget if missing
           sudo apt-get update
           sudo apt-get install -y wget
 
@@ -47,22 +46,31 @@ jobs:
           sudo apt-get install -y --no-install-recommends git build-essential libpq-dev curl libreadline6-dev zlib1g-dev pkg-config cmake
           sudo apt-get install -y --no-install-recommends libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc ccache
           sudo apt-get install -y --no-install-recommends clang libclang-dev gcc tree
+          sudo apt-get install -y postgresql-${{ matrix.postgres }} postgresql-server-dev-${{ matrix.postgres }}
 
-          # Install requested postgres version
-          sudo apt install -y postgresql-${{ matrix.postgres }} postgresql-server-dev-${{ matrix.postgres }} -y
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-          # Ensure installed pg_config is first on path
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: pg${{ matrix.postgres }}-${{ matrix.box.arch }}
+
+      - name: Cache cargo-pgrx binary
+        id: cache-cargo-pgrx
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-pgrx
+          key: cargo-pgrx-${{ matrix.pgrx_version }}-${{ runner.os }}-${{ matrix.box.arch }}
+
+      - name: Install cargo-pgrx
+        if: steps.cache-cargo-pgrx.outputs.cache-hit != 'true'
+        run: cargo install cargo-pgrx --version ${{ matrix.pgrx_version }} --locked
+
+      - name: Build extension
+        run: |
           export PATH=$PATH:/usr/lib/postgresql/${{ matrix.postgres }}/bin
 
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --default-toolchain stable && \
-            rustup --version && \
-            rustc --version && \
-            cargo --version
-
-          # Ensure cargo/rust on path
-          source "$HOME/.cargo/env"
-
-          cargo install cargo-pgrx --version ${{ matrix.pgrx_version }} --locked
           cargo pgrx init --pg${{ matrix.postgres }}=/usr/lib/postgresql/${{ matrix.postgres }}/bin/pg_config
 
           # Explicitly specify pg_config to avoid version detection conflicts
@@ -121,5 +129,5 @@ jobs:
             - First Change
             - Second Change
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: ./${{ matrix.extension_name }}-${{ github.ref_name }}-pg${{ matrix.postgres }}-${{ matrix.box.arch }}-linux-gnu.deb
