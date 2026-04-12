@@ -124,9 +124,43 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: |
-            Changes in this Release
-            - First Change
-            - Second Change
+            ## What's Changed
+
+            ### Breaking Changes
+            <!-- List any changes that break backward compatibility -->
+            -
+
+            ### New Features
+            <!-- New functionality added in this release -->
+            -
+
+            ### Bug Fixes
+            <!-- Issues resolved in this release -->
+            -
+
+            ### Performance Improvements
+            <!-- Optimizations and speed improvements -->
+            -
+
+            ### Security
+            <!-- Security patches or hardening changes -->
+            -
+
+            ### Deprecations
+            <!-- Features or APIs that are deprecated and will be removed in a future release -->
+            -
+
+            ### Documentation
+            <!-- Documentation additions or improvements -->
+            -
+
+            ### Internal / Chores
+            <!-- Dependency updates, CI changes, refactors with no user-facing impact -->
+            -
+
+            ---
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/.../${{ github.ref_name }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: ./${{ matrix.extension_name }}-${{ github.ref_name }}-pg${{ matrix.postgres }}-${{ matrix.box.arch }}-linux-gnu.deb
