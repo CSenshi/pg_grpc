@@ -21,3 +21,14 @@ pub fn get_proto(service_name: &str) -> Option<DescriptorPool> {
 pub fn insert_proto(service_name: &str, pool: DescriptorPool) {
     PROTO_REGISTRY.write().insert(service_name.to_owned(), pool);
 }
+
+/// Removes the pool registered under `service_name`, if any. Returns `true`
+/// if an entry was removed.
+pub fn remove(service_name: &str) -> bool {
+    PROTO_REGISTRY.write().remove(service_name).is_some()
+}
+
+/// Clears every registered pool.
+pub fn clear() {
+    PROTO_REGISTRY.write().clear();
+}
