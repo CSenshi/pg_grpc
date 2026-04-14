@@ -3,13 +3,12 @@ use parking_lot::RwLock;
 use prost_reflect::DescriptorPool;
 use std::collections::HashMap;
 
-/// Per-backend-process registry of user-supplied proto descriptors.
+/// Per-backend-process registry of compiled proto descriptors keyed by
+/// fully-qualified service name (e.g. `"pkg.Service"`).
 ///
-/// Populated via `grpc_register_proto()` and consulted by `grpc_call()`
-/// before falling back to gRPC server reflection. This lets callers target
-/// servers that do not expose reflection.
-///
-/// Key: fully-qualified service name (e.g. "pkg.Service").
+/// Populated by `grpc_proto_compile()` and consulted by `grpc_call()` before
+/// it falls back to gRPC server reflection, so callers can target servers
+/// that do not expose reflection.
 static PROTO_REGISTRY: Lazy<RwLock<HashMap<String, DescriptorPool>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 

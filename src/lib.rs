@@ -5,7 +5,8 @@ use pgrx::prelude::*;
 mod call;
 mod error;
 mod proto;
-mod registry;
+mod proto_registry;
+mod proto_staging;
 
 #[pg_extern]
 fn grpc_call(
@@ -20,16 +21,36 @@ fn grpc_call(
     }
 }
 
-/// Compiles raw `.proto` source and registers every service it defines so
-/// subsequent `grpc_call` invocations can target servers without reflection.
-/// Re-registering a service overwrites the previous descriptor.
+/// Stages a `.proto` file under `filename` for the next `grpc_proto_compile`
+/// call. Nothing is parsed or validated until compile time. Re-registering
+/// the same filename overwrites the previous content.
+///
+/// ```sql
+/// SELECT grpc_proto_register('common.proto', $$ syntax = "proto3"; ... $$);
+/// SELECT grpc_proto_register('service.proto', $$ import "common.proto"; ... $$);
+/// SELECT grpc_proto_compile();
+/// ```
 #[pg_extern]
-fn grpc_register_proto(proto_source: &str) {
-    match proto::compile_proto_source(proto_source) {
+fn grpc_proto_register(filename: &str, source: &str) {
+    proto_staging::stage_file(filename, source);
+}
+
+/// Compiles every file previously staged via `grpc_proto_register`, resolving
+/// imports between them (and against the Google Well-Known Types), then
+/// registers every service discovered so `grpc_call` can target servers
+/// without reflection.
+///
+/// On success, the staging area is cleared. On failure, staged files are
+/// left intact so the caller can fix the offending file and retry.
+#[pg_extern]
+fn grpc_proto_compile() {
+    let staged = proto_staging::snapshot();
+    match proto::compile_proto_files(staged) {
         Ok(pool) => {
             for svc in pool.services() {
-                registry::insert_proto(svc.full_name(), pool.clone());
+                proto_registry::insert_proto(svc.full_name(), pool.clone());
             }
+            proto_staging::clear();
         }
         Err(e) => pgrx::error!("{}", e),
     }
@@ -52,10 +73,11 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_grpc_register_proto_then_call() {
-        // Register a minimal subset of grpcbin.GRPCBin/DummyUnary so the call
-        // path uses the registry instead of reflection.
-        crate::grpc_register_proto(
+    fn test_grpc_proto_register_single_file() {
+        // Stage one self-contained proto, compile, then call via the registry
+        // path (reflection is bypassed).
+        crate::grpc_proto_register(
+            "grpcbin.proto",
             r#"
             syntax = "proto3";
             package grpcbin;
@@ -67,6 +89,7 @@ mod tests {
             }
             "#,
         );
+        crate::grpc_proto_compile();
 
         let result = crate::grpc_call(
             "grpcb.in:9000",
@@ -75,6 +98,40 @@ mod tests {
             None,
         );
         assert_eq!(result.0["f_string"], "via-registry");
+    }
+
+    #[pg_test]
+    fn test_grpc_proto_register_cross_import() {
+        // Two files: common.proto defines the message, service.proto imports
+        // it and declares the service. Exercises the cross-file resolver path.
+        crate::grpc_proto_register(
+            "common.proto",
+            r#"
+            syntax = "proto3";
+            package grpcbin;
+            message DummyMessage { string f_string = 1; }
+            "#,
+        );
+        crate::grpc_proto_register(
+            "service.proto",
+            r#"
+            syntax = "proto3";
+            import "common.proto";
+            package grpcbin;
+            service GRPCBin {
+              rpc DummyUnary(DummyMessage) returns (DummyMessage);
+            }
+            "#,
+        );
+        crate::grpc_proto_compile();
+
+        let result = crate::grpc_call(
+            "grpcb.in:9000",
+            "grpcbin.GRPCBin/DummyUnary",
+            pgrx::JsonB(serde_json::json!({"f_string": "multi-file"})),
+            None,
+        );
+        assert_eq!(result.0["f_string"], "multi-file");
     }
 }
 

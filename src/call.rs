@@ -31,7 +31,7 @@ async fn call_async(
     let (service_name, method_name) = parse_method(method)?;
     let channel = connect(endpoint).await?;
     // Prefer a user-registered proto (via grpc_register_proto); fall back to reflection.
-    let pool = match crate::registry::get_proto(&service_name) {
+    let pool = match crate::proto_registry::get_proto(&service_name) {
         Some(pool) => pool,
         None => proto::fetch_pool(channel.clone(), &service_name).await?,
     };

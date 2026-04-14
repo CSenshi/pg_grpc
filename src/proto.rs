@@ -3,6 +3,7 @@ use prost::Message as _;
 use prost_reflect::DescriptorPool;
 use prost_types::FileDescriptorProto;
 use protox::file::{ChainFileResolver, File, FileResolver, GoogleFileResolver};
+use std::collections::HashMap;
 use tonic::transport::Channel;
 use tonic_reflection::pb::v1alpha::{
     server_reflection_client::ServerReflectionClient, server_reflection_request::MessageRequest,
@@ -65,25 +66,31 @@ pub async fn fetch_pool(channel: Channel, service_name: &str) -> GrpcResult<Desc
 
 // ── User-supplied .proto compilation ─────────────────────────────────────────
 
-/// Compiles raw `.proto` source text into a [`DescriptorPool`].
+/// Compiles a set of in-memory `.proto` files into a [`DescriptorPool`].
 ///
-/// No filesystem access or network calls are made. Well-Known Types
-/// (`google/protobuf/*.proto`) are resolved from protox's bundled copies.
-pub fn compile_proto_source(proto_source: &str) -> GrpcResult<DescriptorPool> {
-    // Build an in-memory resolver that serves the user's source, chained with
-    // the bundled Google WKT resolver so imports like google/protobuf/timestamp.proto work.
+/// `files` maps filename → proto source. Files may `import` one another
+/// (using the filename as the import key) and may import Google Well-Known
+/// Types, which are resolved from protox's bundled copies. No filesystem
+/// access or network calls are made.
+pub fn compile_proto_files(files: HashMap<String, String>) -> GrpcResult<DescriptorPool> {
+    if files.is_empty() {
+        return Err(GrpcError::ProtoCompile("no proto files supplied".into()));
+    }
+
+    let filenames: Vec<String> = files.keys().cloned().collect();
+
     let mut chain = ChainFileResolver::new();
-    chain.add(InMemoryResolver {
-        name: "input.proto".to_owned(),
-        source: proto_source.to_owned(),
-    });
+    chain.add(InMemoryResolver { files });
     chain.add(GoogleFileResolver::new());
 
-    let fds = protox::Compiler::with_file_resolver(chain)
-        .include_imports(true)
-        .open_file("input.proto")
-        .map_err(|e| GrpcError::ProtoCompile(e.to_string()))?
-        .file_descriptor_set();
+    let mut compiler = protox::Compiler::with_file_resolver(chain);
+    compiler.include_imports(true);
+    for name in &filenames {
+        compiler
+            .open_file(name)
+            .map_err(|e| GrpcError::ProtoCompile(e.to_string()))?;
+    }
+    let fds = compiler.file_descriptor_set();
 
     let mut pool = DescriptorPool::new();
     for fdp in fds.file {
@@ -100,18 +107,16 @@ pub fn compile_proto_source(proto_source: &str) -> GrpcResult<DescriptorPool> {
     Ok(pool)
 }
 
-/// A [`FileResolver`] that serves a single in-memory `.proto` file.
+/// A [`FileResolver`] that serves a set of in-memory `.proto` files.
 struct InMemoryResolver {
-    name: String,
-    source: String,
+    files: HashMap<String, String>,
 }
 
 impl FileResolver for InMemoryResolver {
     fn open_file(&self, name: &str) -> Result<File, protox::Error> {
-        if name == self.name {
-            File::from_source(&self.name, &self.source)
-        } else {
-            Err(protox::Error::file_not_found(name))
+        match self.files.get(name) {
+            Some(source) => File::from_source(name, source),
+            None => Err(protox::Error::file_not_found(name)),
         }
     }
 }
