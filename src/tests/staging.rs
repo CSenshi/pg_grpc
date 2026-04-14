@@ -105,3 +105,57 @@ fn test_grpc_proto_unstage_recovers_bad_file() {
     // leave a clean state so other tests aren't affected
     crate::grpc_proto_unregister_all();
 }
+
+#[pg_test]
+fn test_stage_overwrite_uses_latest() {
+    // Stage the same filename twice with different service names. Only the
+    // second source should end up compiled.
+    crate::grpc_proto_unregister_all();
+    crate::grpc_proto_unstage_all();
+
+    crate::grpc_proto_stage(
+        "svc.proto",
+        r#"
+        syntax = "proto3";
+        package overwrite_test;
+        service First { rpc M(Msg) returns (Msg); }
+        message Msg { string x = 1; }
+        "#,
+    );
+    crate::grpc_proto_stage(
+        "svc.proto",
+        r#"
+        syntax = "proto3";
+        package overwrite_test;
+        service Second { rpc M(Msg) returns (Msg); }
+        message Msg { string x = 1; }
+        "#,
+    );
+    crate::grpc_proto_compile();
+
+    assert!(
+        !crate::grpc_proto_unregister("overwrite_test.First"),
+        "overwritten source should not have been compiled"
+    );
+    assert!(
+        crate::grpc_proto_unregister("overwrite_test.Second"),
+        "latest source should be the one compiled"
+    );
+}
+
+#[pg_test(error = "Proto compile error: no proto files supplied")]
+fn test_compile_empty_staging_errors() {
+    // Guard against pollution from other tests in the same backend, then
+    // confirm that compiling with nothing staged surfaces the compile error.
+    crate::grpc_proto_unstage_all();
+    crate::grpc_proto_compile();
+}
+
+#[pg_test]
+fn test_unstage_nonexistent_returns_false() {
+    crate::grpc_proto_unstage_all();
+    assert!(
+        !crate::grpc_proto_unstage("never_staged.proto"),
+        "unstaging a file that was never staged should return false"
+    );
+}

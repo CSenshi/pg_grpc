@@ -31,3 +31,67 @@ fn test_grpc_proto_unregister() {
         "unregister_all should have cleared the registry"
     );
 }
+
+#[pg_test]
+fn test_registry_precedence_over_reflection() {
+    // Stage a proto whose DummyMessage renames field 1 from `f_string` to
+    // `renamed_field`. Wire tag stays the same, so the server still round-trips
+    // the value — but the JSON produced by our decoder uses the registered
+    // name. If reflection had been consulted, the output key would be
+    // `f_string`. This test proves the registry wins over reflection.
+    crate::grpc_proto_unregister_all();
+    crate::grpc_proto_unstage_all();
+    crate::grpc_proto_stage(
+        "override.proto",
+        r#"
+        syntax = "proto3";
+        package grpcbin;
+        service GRPCBin { rpc DummyUnary(DummyMessage) returns (DummyMessage); }
+        message DummyMessage { string renamed_field = 1; }
+        "#,
+    );
+    crate::grpc_proto_compile();
+
+    let result = crate::grpc_call(
+        "grpcb.in:9000",
+        "grpcbin.GRPCBin/DummyUnary",
+        pgrx::JsonB(serde_json::json!({"renamed_field": "winner"})),
+        None,
+    );
+    assert_eq!(result.0["renamed_field"], "winner");
+    assert!(
+        result.0.get("f_string").is_none(),
+        "reflection-derived field name should not appear when registry hits"
+    );
+
+    crate::grpc_proto_unregister_all();
+}
+
+#[pg_test]
+fn test_multi_service_proto_file() {
+    // A single .proto that defines two services → every service should land
+    // in the registry under its own fully-qualified name, and unregistering
+    // one should leave the other intact.
+    crate::grpc_proto_unregister_all();
+    crate::grpc_proto_unstage_all();
+    crate::grpc_proto_stage(
+        "multi.proto",
+        r#"
+        syntax = "proto3";
+        package multi_svc;
+        service Alpha { rpc M(Msg) returns (Msg); }
+        service Beta  { rpc M(Msg) returns (Msg); }
+        message Msg { string x = 1; }
+        "#,
+    );
+    crate::grpc_proto_compile();
+
+    assert!(
+        crate::grpc_proto_unregister("multi_svc.Alpha"),
+        "Alpha should have been registered"
+    );
+    assert!(
+        crate::grpc_proto_unregister("multi_svc.Beta"),
+        "Beta should have been registered independently"
+    );
+}
