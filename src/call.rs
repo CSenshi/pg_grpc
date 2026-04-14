@@ -30,7 +30,11 @@ async fn call_async(
 ) -> GrpcResult<serde_json::Value> {
     let (service_name, method_name) = parse_method(method)?;
     let channel = connect(endpoint).await?;
-    let pool = proto::fetch_pool(channel.clone(), &service_name).await?;
+    // Prefer a user-registered proto (via grpc_register_proto); fall back to reflection.
+    let pool = match crate::registry::get_proto(&service_name) {
+        Some(pool) => pool,
+        None => proto::fetch_pool(channel.clone(), &service_name).await?,
+    };
     let method_desc = resolve_method(&pool, &service_name, &method_name)?;
     let request_bytes = encode_request(method_desc.input(), request_json)?;
     let response_bytes = unary_call(channel, &service_name, &method_name, request_bytes).await?;
