@@ -38,7 +38,7 @@ serde         = "1"
 tokio = { version = "1", features = ["rt", "net", "time"] }
 
 # Error handling
-thiserror = "1"
+thiserror = "2"
 
 # Process-global caches (channel + proto descriptor pools)
 parking_lot = "0.12"
