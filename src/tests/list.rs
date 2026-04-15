@@ -1,3 +1,5 @@
+type RegisteredRow = (String, String, Option<String>, Option<String>, Option<String>);
+
 #[pg_test]
 fn test_list_staged_empty() {
     crate::grpc_proto_unstage_all();
@@ -64,7 +66,8 @@ fn test_list_staged_cleared_after_successful_compile() {
 fn test_list_registered_empty() {
     crate::grpc_proto_unregister_all();
 
-    let rows: Vec<(String, String, String)> = crate::grpc_proto_list_registered().collect();
+    let rows: Vec<RegisteredRow> =
+        crate::grpc_proto_list_registered().collect();
     assert_eq!(
         rows.len(),
         0,
@@ -100,22 +103,27 @@ fn test_list_registered_row_per_service() {
     crate::grpc_proto_stage("beta.proto", beta_source);
     crate::grpc_proto_compile();
 
-    let mut rows: Vec<(String, String, String)> = crate::grpc_proto_list_registered()
-        .filter(|(svc, _, _)| svc.starts_with("list_reg_test."))
-        .collect();
+    let mut rows: Vec<RegisteredRow> =
+        crate::grpc_proto_list_registered()
+            .filter(|(svc, _, _, _, _)| svc.starts_with("list_reg_test."))
+            .collect();
     rows.sort_by(|l, r| l.0.cmp(&r.0));
 
     assert_eq!(rows.len(), 2, "one row per registered service");
     assert_eq!(rows[0].0, "list_reg_test.Alpha");
-    assert_eq!(rows[0].1, "alpha.proto");
-    assert_eq!(rows[0].2, alpha_source);
+    assert_eq!(rows[0].1, "user");
+    assert_eq!(rows[0].2.as_deref(), Some("alpha.proto"));
+    assert_eq!(rows[0].3.as_deref(), Some(alpha_source));
+    assert_eq!(rows[0].4, None);
     assert_eq!(rows[1].0, "list_reg_test.Beta");
-    assert_eq!(rows[1].1, "beta.proto");
-    assert_eq!(rows[1].2, beta_source);
+    assert_eq!(rows[1].1, "user");
+    assert_eq!(rows[1].2.as_deref(), Some("beta.proto"));
+    assert_eq!(rows[1].3.as_deref(), Some(beta_source));
+    assert_eq!(rows[1].4, None);
 
     assert!(
         crate::grpc_proto_list_registered()
-            .all(|(_, filename, _)| filename != "common.proto"),
+            .all(|(_, _, filename, _, _)| filename.as_deref() != Some("common.proto")),
         "import-only files should not appear in list_registered"
     );
 
@@ -137,15 +145,17 @@ fn test_list_registered_multi_service_file() {
     crate::grpc_proto_stage("multi.proto", multi_source);
     crate::grpc_proto_compile();
 
-    let mut rows: Vec<(String, String, String)> = crate::grpc_proto_list_registered()
-        .filter(|(svc, _, _)| svc.starts_with("list_multi_test."))
-        .collect();
+    let mut rows: Vec<RegisteredRow> =
+        crate::grpc_proto_list_registered()
+            .filter(|(svc, _, _, _, _)| svc.starts_with("list_multi_test."))
+            .collect();
     rows.sort_by(|l, r| l.0.cmp(&r.0));
 
     assert_eq!(rows.len(), 2, "multi-service file should produce one row per service");
     for row in &rows {
-        assert_eq!(row.1, "multi.proto");
-        assert_eq!(row.2, multi_source);
+        assert_eq!(row.1, "user");
+        assert_eq!(row.2.as_deref(), Some("multi.proto"));
+        assert_eq!(row.3.as_deref(), Some(multi_source));
     }
     assert_eq!(rows[0].0, "list_multi_test.Alpha");
     assert_eq!(rows[1].0, "list_multi_test.Beta");
@@ -171,7 +181,7 @@ fn test_list_registered_shrinks_per_service_unregister() {
 
     assert_eq!(
         crate::grpc_proto_list_registered()
-            .filter(|(svc, _, _)| svc.starts_with("list_unregister_test."))
+            .filter(|(svc, _, _, _, _)| svc.starts_with("list_unregister_test."))
             .count(),
         2,
         "both services should be listed after compile"
@@ -179,12 +189,13 @@ fn test_list_registered_shrinks_per_service_unregister() {
 
     assert!(crate::grpc_proto_unregister("list_unregister_test.Alpha"));
 
-    let rows: Vec<(String, String, String)> = crate::grpc_proto_list_registered()
-        .filter(|(svc, _, _)| svc.starts_with("list_unregister_test."))
-        .collect();
+    let rows: Vec<RegisteredRow> =
+        crate::grpc_proto_list_registered()
+            .filter(|(svc, _, _, _, _)| svc.starts_with("list_unregister_test."))
+            .collect();
     assert_eq!(rows.len(), 1, "only Beta should remain");
     assert_eq!(rows[0].0, "list_unregister_test.Beta");
-    assert_eq!(rows[0].1, "pair.proto");
+    assert_eq!(rows[0].2.as_deref(), Some("pair.proto"));
 
     crate::grpc_proto_unregister_all();
 }

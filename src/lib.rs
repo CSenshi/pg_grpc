@@ -45,7 +45,12 @@ fn grpc_proto_compile() {
                 // protox uses our filenames verbatim, so parent_file().name() keys back into the snapshot.
                 let filename = svc.parent_file().name().to_owned();
                 let source = staged.get(&filename).cloned().unwrap_or_default();
-                proto_registry::insert_proto(svc.full_name(), pool.clone(), filename, source);
+                proto_registry::insert_proto_manual(
+                    svc.full_name(),
+                    pool.clone(),
+                    filename,
+                    source,
+                );
             }
             proto_staging::clear();
         }
@@ -66,7 +71,7 @@ fn grpc_proto_unregister_all() {
 #[pg_extern]
 fn grpc_proto_list_staged(
 ) -> TableIterator<'static, (name!(filename, String), name!(source, String))> {
-    TableIterator::new(proto_staging::list().into_iter())
+    TableIterator::new(proto_staging::list())
 }
 
 #[pg_extern]
@@ -74,11 +79,31 @@ fn grpc_proto_list_registered() -> TableIterator<
     'static,
     (
         name!(service_name, String),
-        name!(filename, String),
-        name!(source, String),
+        name!(origin, String),
+        name!(filename, Option<String>),
+        name!(source, Option<String>),
+        name!(endpoint, Option<String>),
     ),
 > {
-    TableIterator::new(proto_registry::list().into_iter())
+    let rows = proto_registry::list()
+        .into_iter()
+        .map(|(service_name, origin)| match origin {
+            proto_registry::Origin::UserStaged { filename, source } => (
+                service_name,
+                "user".to_string(),
+                Some(filename),
+                Some(source),
+                None,
+            ),
+            proto_registry::Origin::Reflection { endpoint } => (
+                service_name,
+                "reflection".to_string(),
+                None,
+                None,
+                Some(endpoint),
+            ),
+        });
+    TableIterator::new(rows)
 }
 
 #[cfg(any(test, feature = "pg_test"))]

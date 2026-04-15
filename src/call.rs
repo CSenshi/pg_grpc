@@ -31,7 +31,15 @@ async fn call_async(
     let channel = connect(endpoint).await?;
     let pool = match crate::proto_registry::get_proto(&service_name) {
         Some(pool) => pool,
-        None => proto::fetch_pool(channel.clone(), &service_name).await?,
+        None => {
+            let pool = proto::fetch_pool(channel.clone(), &service_name).await?;
+            crate::proto_registry::insert_proto_reflection(
+                &service_name,
+                pool.clone(),
+                endpoint.to_owned(),
+            );
+            pool
+        }
     };
     let method_desc = resolve_method(&pool, &service_name, &method_name)?;
     let request_bytes = encode_request(method_desc.input(), request_json)?;
