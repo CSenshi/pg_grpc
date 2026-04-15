@@ -14,8 +14,9 @@ fn grpc_call(
     method: &str,
     request: pgrx::JsonB,
     _timeout_ms: default!(Option<i64>, "null"),
+    use_reflection: default!(Option<bool>, "true"),
 ) -> pgrx::JsonB {
-    match call::make_grpc_call(endpoint, method, request.0) {
+    match call::make_grpc_call(endpoint, method, request.0, use_reflection.unwrap_or(true)) {
         Ok(value) => pgrx::JsonB(value),
         Err(e) => pgrx::error!("{}", e),
     }
@@ -75,6 +76,7 @@ fn grpc_proto_list_staged(
 }
 
 #[pg_extern]
+#[allow(clippy::type_complexity)]
 fn grpc_proto_list_registered() -> TableIterator<
     'static,
     (

@@ -13,25 +13,27 @@ pub fn make_grpc_call(
     endpoint: &str,
     method: &str,
     request_json: serde_json::Value,
+    use_reflection: bool,
 ) -> GrpcResult<serde_json::Value> {
     // pgrx backends are single-threaded; a multi-thread runtime would unsafely cross the Postgres boundary.
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| GrpcError::Connection(e.to_string()))?;
-    rt.block_on(call_async(endpoint, method, request_json))
+    rt.block_on(call_async(endpoint, method, request_json, use_reflection))
 }
 
 async fn call_async(
     endpoint: &str,
     method: &str,
     request_json: serde_json::Value,
+    use_reflection: bool,
 ) -> GrpcResult<serde_json::Value> {
     let (service_name, method_name) = parse_method(method)?;
     let channel = connect(endpoint).await?;
     let pool = match crate::proto_registry::get_proto(&service_name) {
         Some(pool) => pool,
-        None => {
+        None if use_reflection => {
             let pool = proto::fetch_pool(channel.clone(), &service_name).await?;
             crate::proto_registry::insert_proto_reflection(
                 &service_name,
@@ -39,6 +41,11 @@ async fn call_async(
                 endpoint.to_owned(),
             );
             pool
+        }
+        None => {
+            return Err(GrpcError::Proto(format!(
+                "service not found in registry and reflection disabled: {service_name}"
+            )));
         }
     };
     let method_desc = resolve_method(&pool, &service_name, &method_name)?;
