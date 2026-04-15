@@ -1,7 +1,15 @@
 [package]
-name = "pg_grpc"
-version = "0.1.0"
-edition = "2021"
+name        = "pg_grpc"
+version     = "0.1.0"
+edition     = "2021"
+authors     = ["CSenshi"]
+description = "PostgreSQL extension for making gRPC calls from SQL, with reflection or user-supplied .proto files."
+license     = "MIT"
+repository  = "https://github.com/CSenshi/pg_grpc"
+homepage    = "https://github.com/CSenshi/pg_grpc"
+readme      = "README.md"
+keywords    = ["postgres", "grpc", "extension", "pgrx", "protobuf"]
+categories  = ["database", "api-bindings"]
 
 [lib]
 crate-type = ["cdylib", "lib"]
