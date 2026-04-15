@@ -2,16 +2,6 @@
 
 Make gRPC calls directly from PostgreSQL SQL.
 
-```sql
-SELECT grpc_call('localhost:50051', 'package.Service/Method', '{"key": "value"}'::jsonb);
-```
-
-Schemas are resolved at runtime. Two sources are supported:
-
-1. **gRPC server reflection** (default) — no `.proto` files needed, the server does the work.
-2. **User-supplied `.proto` source** (`grpc_proto_stage` + `grpc_proto_compile`) — for servers without reflection, or when you want deterministic schemas.
-
-## Calling a service
 
 ```sql
 -- named
@@ -25,26 +15,28 @@ SELECT grpc_call(
 SELECT grpc_call('grpcb.in:9000', 'grpcbin.GRPCBin/DummyUnary', '{"f_string": "hello"}'::jsonb);
 ```
 
+Both return:
+
+```
+       grpc_call
+-----------------------
+ {"f_string": "hello"}
+(1 row)
+```
+
 ### `grpc_call` signature
 
 ```sql
 grpc_call(
-    endpoint   TEXT,
-    method     TEXT,
-    request    JSONB,
-    timeout_ms BIGINT DEFAULT NULL  -- accepted but not yet implemented
+    endpoint       TEXT,
+    method         TEXT,
+    request        JSONB,
+    timeout_ms     BIGINT  DEFAULT NULL,  -- accepted but not yet implemented
+    use_reflection BOOLEAN DEFAULT TRUE
 ) RETURNS JSONB
 ```
 
-| Parameter | Description |
-|---|---|
-| `endpoint` | `host:port` — no scheme (e.g. `localhost:50051`, not `http://localhost:50051`) |
-| `method` | `package.Service/Method` (e.g. `grpcbin.GRPCBin/DummyUnary`) |
-| `request` | Request payload; field names must match proto field names |
-
 Returns the response as `JSONB` with proto field names (snake_case).
-
-On every call, pg_grpc first checks the user-staged proto registry for the service; if nothing is registered, it falls back to gRPC server reflection. Staged protos always win over reflection.
 
 ## Quickstart: stage protos and call
 
@@ -88,29 +80,28 @@ SELECT grpc_call(
 
 ## Proto management API
 
-| Function | Description |
-|---|---|
-| `grpc_proto_stage(filename, source)` | Stage a `.proto` file for the next compile |
-| `grpc_proto_unstage(filename)` | Remove one staged file |
-| `grpc_proto_unstage_all()` | Clear all staged files |
-| `grpc_proto_compile()` | Parse + compile staged files |
-| `grpc_proto_unregister(service_name)` | Remove one compiled service|
-| `grpc_proto_unregister_all()` | Remove all compiled services |
-| `grpc_proto_list_staged()` | List all staged `.proto` |
-| `grpc_proto_list_registered()` | List all registered services |
+| Function                              | Description                                |
+| ------------------------------------- | ------------------------------------------ |
+| `grpc_proto_stage(filename, source)`  | Stage a `.proto` file for the next compile |
+| `grpc_proto_unstage(filename)`        | Remove one staged file                     |
+| `grpc_proto_unstage_all()`            | Clear all staged files                     |
+| `grpc_proto_compile()`                | Parse + compile staged files               |
+| `grpc_proto_unregister(service_name)` | Remove one compiled service                |
+| `grpc_proto_unregister_all()`         | Remove all compiled services               |
+| `grpc_proto_list_staged()`            | List all staged `.proto`                   |
+| `grpc_proto_list_registered()`        | List all registered services               |
 
-The staging area and registry are **per-connection** (per backend process). They reset when you reconnect.
 
 ## Errors
 
 All errors raise a PostgreSQL `ERROR` and abort the current statement:
 
-| Prefix | Cause |
-|---|---|
-| `Connection error: …` | Could not reach the endpoint |
-| `Proto error: …` | Reflection failed, symbol not found, or JSON ↔ protobuf encode/decode error |
-| `Proto compile error: …` | `grpc_proto_compile` failed to parse/resolve the staged files |
-| `gRPC call failed: …` | Server returned a non-OK gRPC status |
+| Prefix                   | Cause                                                                       |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `Connection error: …`    | Could not reach the endpoint                                                |
+| `Proto error: …`         | Reflection failed, symbol not found, or JSON ↔ protobuf encode/decode error |
+| `Proto compile error: …` | `grpc_proto_compile` failed to parse/resolve the staged files               |
+| `gRPC call failed: …`    | Server returned a non-OK gRPC status                                        |
 
 ## Limitations
 
