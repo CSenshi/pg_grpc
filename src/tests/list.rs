@@ -33,8 +33,6 @@ fn test_list_staged_returns_filename_and_source() {
 
 #[pg_test]
 fn test_list_staged_cleared_after_successful_compile() {
-    // Compile moves everything from staging to registry, so list_staged
-    // should be empty afterwards.
     crate::grpc_proto_unregister_all();
     crate::grpc_proto_unstage_all();
     crate::grpc_proto_stage(
@@ -76,10 +74,6 @@ fn test_list_registered_empty() {
 
 #[pg_test]
 fn test_list_registered_row_per_service() {
-    // Two separate service-bearing files plus a shared message-only
-    // common.proto. Expect one row per service, each carrying its own
-    // originating filename and source. common.proto contributes no services
-    // and must not appear.
     crate::grpc_proto_unregister_all();
     crate::grpc_proto_unstage_all();
 
@@ -119,7 +113,6 @@ fn test_list_registered_row_per_service() {
     assert_eq!(rows[1].1, "beta.proto");
     assert_eq!(rows[1].2, beta_source);
 
-    // common.proto must NOT appear — it has no services
     assert!(
         crate::grpc_proto_list_registered()
             .all(|(_, filename, _)| filename != "common.proto"),
@@ -131,9 +124,6 @@ fn test_list_registered_row_per_service() {
 
 #[pg_test]
 fn test_list_registered_multi_service_file() {
-    // A single file with two services produces TWO rows — one per service —
-    // both sharing the same filename and source. Users who want the deduped
-    // file view can `SELECT DISTINCT filename, source`.
     crate::grpc_proto_unregister_all();
     crate::grpc_proto_unstage_all();
 
@@ -165,8 +155,6 @@ fn test_list_registered_multi_service_file() {
 
 #[pg_test]
 fn test_list_registered_shrinks_per_service_unregister() {
-    // Per-service unregistration should remove exactly that row. The other
-    // service from the same file remains.
     crate::grpc_proto_unregister_all();
     crate::grpc_proto_unstage_all();
     crate::grpc_proto_stage(

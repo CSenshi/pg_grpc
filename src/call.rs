@@ -9,13 +9,12 @@ use tonic::transport::Channel;
 use crate::error::{GrpcError, GrpcResult};
 use crate::proto;
 
-/// Entry point called from the `#[pg_extern]`.  Spins up a single-threaded
-/// Tokio runtime (as required by pgrx) and drives the async call.
 pub fn make_grpc_call(
     endpoint: &str,
     method: &str,
     request_json: serde_json::Value,
 ) -> GrpcResult<serde_json::Value> {
+    // pgrx backends are single-threaded; a multi-thread runtime would unsafely cross the Postgres boundary.
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -30,7 +29,6 @@ async fn call_async(
 ) -> GrpcResult<serde_json::Value> {
     let (service_name, method_name) = parse_method(method)?;
     let channel = connect(endpoint).await?;
-    // Prefer a user-registered proto (via grpc_register_proto); fall back to reflection.
     let pool = match crate::proto_registry::get_proto(&service_name) {
         Some(pool) => pool,
         None => proto::fetch_pool(channel.clone(), &service_name).await?,
@@ -41,9 +39,6 @@ async fn call_async(
     decode_response(method_desc.output(), response_bytes)
 }
 
-// ── Steps ────────────────────────────────────────────────────────────────────
-
-/// Splits `"pkg.Service/Method"` into `("pkg.Service", "Method")`.
 fn parse_method(method: &str) -> GrpcResult<(String, String)> {
     let (service, method_name) = method.rsplit_once('/').ok_or_else(|| {
         GrpcError::Proto(format!(
@@ -53,9 +48,7 @@ fn parse_method(method: &str) -> GrpcResult<(String, String)> {
     Ok((service.to_string(), method_name.to_string()))
 }
 
-/// Opens a gRPC channel to `host:port` (no scheme).
-// TODO: cache channels by endpoint (same as PROTO_CACHE) to avoid a full
-//       TCP+HTTP/2 handshake on every SQL call.
+// TODO: cache channels by endpoint to avoid a full TCP+HTTP/2 handshake on every SQL call.
 async fn connect(endpoint: &str) -> GrpcResult<Channel> {
     Channel::from_shared(format!("http://{endpoint}"))
         .map_err(|e| GrpcError::Connection(e.to_string()))?
@@ -64,7 +57,6 @@ async fn connect(endpoint: &str) -> GrpcResult<Channel> {
         .map_err(|e| GrpcError::Connection(format!("{endpoint}: {e}")))
 }
 
-/// Looks up a method descriptor by service + method name.
 fn resolve_method<'a>(
     pool: &'a DescriptorPool,
     service_name: &str,
@@ -80,7 +72,6 @@ fn resolve_method<'a>(
     Ok(method)
 }
 
-/// JSON → `DynamicMessage` → protobuf-encoded bytes.
 fn encode_request(desc: MessageDescriptor, json: serde_json::Value) -> GrpcResult<Bytes> {
     let json_str = serde_json::to_string(&json)
         .map_err(|e| GrpcError::Proto(format!("serialize request: {e}")))?;
@@ -91,7 +82,6 @@ fn encode_request(desc: MessageDescriptor, json: serde_json::Value) -> GrpcResul
     Ok(Bytes::from(msg.encode_to_vec()))
 }
 
-/// Makes a raw unary gRPC call and returns the response body as bytes.
 async fn unary_call(
     channel: Channel,
     service_name: &str,
@@ -113,13 +103,13 @@ async fn unary_call(
         .map_err(|s| GrpcError::Call(s.to_string()))
 }
 
-/// Protobuf-encoded bytes → `DynamicMessage` → JSON (snake_case field names).
 fn decode_response(desc: MessageDescriptor, bytes: Bytes) -> GrpcResult<serde_json::Value> {
     let msg = DynamicMessage::decode(desc, bytes)
         .map_err(|e| GrpcError::Proto(format!("decode response: {e}")))?;
 
     let mut buf = Vec::new();
     let mut ser = serde_json::Serializer::new(&mut buf);
+    // use_proto_field_name: emit snake_case `.proto` field names, not the default camelCase JSON names.
     msg.serialize_with_options(
         &mut ser,
         &SerializeOptions::new().use_proto_field_name(true),
@@ -129,10 +119,8 @@ fn decode_response(desc: MessageDescriptor, bytes: Bytes) -> GrpcResult<serde_js
         .map_err(|e| GrpcError::Proto(format!("parse serialized response: {e}")))
 }
 
-// ── Raw passthrough bytes codec ───────────────────────────────────────────────
-// Lets us make gRPC calls with pre-encoded request bytes and get raw response
-// bytes back, without needing generated prost types.
-
+// Passes raw request/response bytes through without generated prost types,
+// so we can drive gRPC calls from runtime-resolved schemas.
 #[derive(Default)]
 struct RawBytesCodec;
 struct RawEncoder;

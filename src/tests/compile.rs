@@ -1,7 +1,3 @@
-// Direct unit tests for `proto::compile_proto_files`. These hit the pure-Rust
-// compile path without any gRPC connection, so they run fast and assert error
-// messages precisely.
-
 use std::collections::HashMap;
 
 fn one_file(name: &str, source: &str) -> HashMap<String, String> {
@@ -68,9 +64,7 @@ fn test_compile_syntax_error() {
 
 #[pg_test]
 fn test_compile_google_wkt_import() {
-    // Verifies the GoogleFileResolver chain branch: importing a well-known
-    // type resolves against protox's bundled copy without us having to stage
-    // it ourselves.
+    // Exercises the GoogleFileResolver branch: WKT imports resolve without staging.
     let files = one_file(
         "evented.proto",
         r#"

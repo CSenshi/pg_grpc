@@ -64,14 +64,8 @@ pub async fn fetch_pool(channel: Channel, service_name: &str) -> GrpcResult<Desc
     Ok(pool)
 }
 
-// ── User-supplied .proto compilation ─────────────────────────────────────────
-
-/// Compiles a set of in-memory `.proto` files into a [`DescriptorPool`].
-///
-/// `files` maps filename → proto source. Files may `import` one another
-/// (using the filename as the import key) and may import Google Well-Known
-/// Types, which are resolved from protox's bundled copies. No filesystem
-/// access or network calls are made.
+// Imports resolve against the filename keys in `files` and against protox's
+// bundled Google Well-Known Types. No filesystem or network access.
 pub fn compile_proto_files(files: HashMap<String, String>) -> GrpcResult<DescriptorPool> {
     if files.is_empty() {
         return Err(GrpcError::ProtoCompile("no proto files supplied".into()));
@@ -84,6 +78,8 @@ pub fn compile_proto_files(files: HashMap<String, String>) -> GrpcResult<Descrip
     chain.add(GoogleFileResolver::new());
 
     let mut compiler = protox::Compiler::with_file_resolver(chain);
+    // Without include_imports, transitively-imported files (incl. WKTs) are omitted from the
+    // FileDescriptorSet and add_file_descriptor_proto below fails to resolve their types.
     compiler.include_imports(true);
     for name in &filenames {
         compiler
@@ -107,7 +103,6 @@ pub fn compile_proto_files(files: HashMap<String, String>) -> GrpcResult<Descrip
     Ok(pool)
 }
 
-/// A [`FileResolver`] that serves a set of in-memory `.proto` files.
 struct InMemoryResolver {
     files: HashMap<String, String>,
 }

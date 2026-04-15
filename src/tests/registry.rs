@@ -1,7 +1,5 @@
 #[pg_test]
 fn test_grpc_proto_unregister() {
-    // Register a service, confirm unregister removes it, then re-register
-    // and use unregister_all to wipe everything.
     let proto = r#"
         syntax = "proto3";
         package grpcbin;
@@ -22,7 +20,6 @@ fn test_grpc_proto_unregister() {
         "second unregister should return false"
     );
 
-    // Re-register, then wipe via unregister_all.
     crate::grpc_proto_stage("grpcbin.proto", proto);
     crate::grpc_proto_compile();
     crate::grpc_proto_unregister_all();
@@ -34,11 +31,8 @@ fn test_grpc_proto_unregister() {
 
 #[pg_test]
 fn test_registry_precedence_over_reflection() {
-    // Stage a proto whose DummyMessage renames field 1 from `f_string` to
-    // `renamed_field`. Wire tag stays the same, so the server still round-trips
-    // the value — but the JSON produced by our decoder uses the registered
-    // name. If reflection had been consulted, the output key would be
-    // `f_string`. This test proves the registry wins over reflection.
+    // Renames field 1 to `renamed_field`; wire tag is unchanged so the server still round-trips.
+    // If reflection had been consulted, the decoded JSON would use `f_string`.
     crate::grpc_proto_unregister_all();
     crate::grpc_proto_unstage_all();
     crate::grpc_proto_stage(
@@ -69,9 +63,6 @@ fn test_registry_precedence_over_reflection() {
 
 #[pg_test]
 fn test_multi_service_proto_file() {
-    // A single .proto that defines two services → every service should land
-    // in the registry under its own fully-qualified name, and unregistering
-    // one should leave the other intact.
     crate::grpc_proto_unregister_all();
     crate::grpc_proto_unstage_all();
     crate::grpc_proto_stage(
