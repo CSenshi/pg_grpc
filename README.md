@@ -93,14 +93,14 @@ SELECT grpc_call(
 
 | Function | Description |
 |---|---|
-| `grpc_proto_stage(filename TEXT, source TEXT)` | Stage a `.proto` file for the next compile. Re-staging the same filename overwrites. Source is not parsed until compile. |
-| `grpc_proto_unstage(filename TEXT) → BOOLEAN` | Remove one staged file. Returns `true` if it existed. Registry of already-compiled services is untouched. |
-| `grpc_proto_unstage_all()` | Clear every staged file. Registry untouched. |
-| `grpc_proto_compile()` | Parse all staged files, resolve cross-imports + Google WKTs, and insert every discovered service into the registry. On success, staging is cleared. On failure (e.g. syntax error), staging is preserved so you can fix the bad file and retry. |
-| `grpc_proto_unregister(service_name TEXT) → BOOLEAN` | Remove one compiled service by fully-qualified name (e.g. `"auth.AuthService"`). Returns `true` if it existed. |
-| `grpc_proto_unregister_all()` | Remove every compiled service. Staging untouched. |
-| `grpc_proto_list_staged() → TABLE(filename TEXT, source TEXT)` | List every staged `.proto` file with its source. Empty after a successful `grpc_proto_compile`. |
-| `grpc_proto_list_registered() → TABLE(service_name TEXT, filename TEXT, source TEXT)` | List every registered service along with the filename and source of the `.proto` file that defined it. One row per service — a file with multiple services produces multiple rows sharing the same filename/source. Import-only files (no services) are not listed. |
+| `grpc_proto_stage(filename, source)` | Stage a `.proto` file for the next compile |
+| `grpc_proto_unstage(filename)` | Remove one staged file |
+| `grpc_proto_unstage_all()` | Clear all staged files |
+| `grpc_proto_compile()` | Parse + compile staged files |
+| `grpc_proto_unregister(service_name)` | Remove one compiled service|
+| `grpc_proto_unregister_all()` | Remove all compiled services |
+| `grpc_proto_list_staged()` | List all staged `.proto` |
+| `grpc_proto_list_registered()` | List all registered services |
 
 The staging area and registry are **per-connection** (per backend process). They reset when you reconnect.
 
