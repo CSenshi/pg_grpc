@@ -1,4 +1,4 @@
-comment = 'pg_grpc:  Created by pgrx'
+comment = 'Make gRPC calls from SQL using reflection or user-supplied .proto files'
 default_version = '@CARGO_VERSION@'
 module_pathname = 'pg_grpc'
 relocatable = false
