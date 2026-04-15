@@ -299,3 +299,7 @@ grpc_proto_compile() RETURNS VOID
 grpc_proto_unregister(service_name TEXT) RETURNS BOOLEAN
 grpc_proto_unregister_all() RETURNS VOID
 ```
+
+## Release
+
+cargo release [LEVEL|VERSION] -c release.toml
