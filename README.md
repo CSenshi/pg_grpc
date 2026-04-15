@@ -50,10 +50,6 @@ On every call, pg_grpc first checks the user-staged proto registry for the servi
 
 ### 1. Compile protos
 
-> **Optional.** Skip this step if your server exposes gRPC reflection — `grpc_call` will resolve schemas automatically. Stage protos only when reflection is unavailable or when you want deterministic, version-pinned schemas.
-
-Stage each `.proto` file under the filename its `import` statements reference, then compile:
-
 ```sql
 SELECT grpc_proto_stage('common.proto', $PROTO$
     syntax = "proto3";
@@ -77,7 +73,8 @@ $PROTO$);
 SELECT grpc_proto_compile();
 ```
 
-Use Postgres dollar-quoted strings (`$$...$$` or `$TAG$...$TAG$`) to paste proto source without escaping. Google Well-Known Types (`google/protobuf/timestamp.proto`, etc.) are resolved automatically.
+
+> **Optional.** Skip this step if your server exposes gRPC reflection — `grpc_call` will resolve schemas automatically. 
 
 ### 2. Call the service
 
@@ -89,7 +86,7 @@ SELECT grpc_call(
 );
 ```
 
-### Proto management API
+## Proto management API
 
 | Function | Description |
 |---|---|
@@ -103,41 +100,6 @@ SELECT grpc_call(
 | `grpc_proto_list_registered()` | List all registered services |
 
 The staging area and registry are **per-connection** (per backend process). They reset when you reconnect.
-
-#### Inspecting state
-
-Both list functions are set-returning and must be used in a `FROM` clause:
-
-```sql
--- What's currently staged, waiting to be compiled?
-SELECT filename FROM grpc_proto_list_staged();
-
--- What services can I call right now?
-SELECT service_name FROM grpc_proto_list_registered();
-
--- Unique file inventory of the registry (staged-style view)
-SELECT DISTINCT filename, source FROM grpc_proto_list_registered();
-
--- Which services does a specific file define?
-SELECT service_name FROM grpc_proto_list_registered() WHERE filename = 'auth.proto';
-```
-
-### Recovery
-
-If `grpc_proto_compile()` fails because one staged file is broken, the other staged files remain in place:
-
-```sql
-SELECT grpc_proto_stage('good.proto',    $PROTO$ ... $PROTO$);
-SELECT grpc_proto_stage('bad.proto',     'this is not valid proto');
-SELECT grpc_proto_stage('service.proto', $PROTO$ ... $PROTO$);
-SELECT grpc_proto_compile();                      -- ERROR: Proto compile error: ...
-
--- Fix: either re-stage bad.proto with correct source, or drop it:
-SELECT grpc_proto_unstage('bad.proto');
-SELECT grpc_proto_compile();                      -- now succeeds
-```
-
-Recovering never touches already-compiled services, so in-flight `grpc_call`s against previously-registered services keep working throughout.
 
 ## Errors
 
