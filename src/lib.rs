@@ -54,17 +54,24 @@ fn grpc_proto_unstage_all() {
 /// Compiles every file previously staged via `grpc_proto_stage`, resolving
 /// imports between them (and against the Google Well-Known Types), then
 /// registers every service discovered so `grpc_call` can target servers
-/// without reflection.
+/// without reflection. Each registered service is stored alongside the
+/// source text of the `.proto` file that originally defined it, so
+/// `grpc_proto_list_registered` can echo the source back to callers.
 ///
 /// On success, the staging area is cleared. On failure, staged files are
 /// left intact so the caller can fix the offending file and retry.
 #[pg_extern]
 fn grpc_proto_compile() {
     let staged = proto_staging::snapshot();
-    match proto::compile_proto_files(staged) {
+    match proto::compile_proto_files(staged.clone()) {
         Ok(pool) => {
             for svc in pool.services() {
-                proto_registry::insert_proto(svc.full_name(), pool.clone());
+                // Recover the filename + source of the file that defined
+                // this service. protox uses our filenames verbatim, so the
+                // parent file name is a key into the pre-compile snapshot.
+                let filename = svc.parent_file().name().to_owned();
+                let source = staged.get(&filename).cloned().unwrap_or_default();
+                proto_registry::insert_proto(svc.full_name(), pool.clone(), filename, source);
             }
             proto_staging::clear();
         }
@@ -84,6 +91,47 @@ fn grpc_proto_unregister(service_name: &str) -> bool {
 #[pg_extern]
 fn grpc_proto_unregister_all() {
     proto_registry::clear();
+}
+
+/// Lists every currently-staged `.proto` file along with its source text.
+/// Order is unspecified.
+///
+/// ```sql
+/// SELECT filename FROM grpc_proto_list_staged();
+/// SELECT * FROM grpc_proto_list_staged() WHERE filename = 'common.proto';
+/// ```
+#[pg_extern]
+fn grpc_proto_list_staged(
+) -> TableIterator<'static, (name!(filename, String), name!(source, String))> {
+    TableIterator::new(proto_staging::list().into_iter())
+}
+
+/// Lists every registered service together with the `.proto` filename and
+/// source that defined it. One row per service — a file with multiple
+/// services produces multiple rows sharing the same filename/source. Files
+/// that contribute only messages/types via `import` do not appear. Order
+/// is unspecified.
+///
+/// ```sql
+/// -- Everything that can currently be called
+/// SELECT service_name FROM grpc_proto_list_registered();
+///
+/// -- Unique file inventory (staged-style view)
+/// SELECT DISTINCT filename, source FROM grpc_proto_list_registered();
+///
+/// -- Services defined by a specific file
+/// SELECT service_name FROM grpc_proto_list_registered() WHERE filename = 'auth.proto';
+/// ```
+#[pg_extern]
+fn grpc_proto_list_registered() -> TableIterator<
+    'static,
+    (
+        name!(service_name, String),
+        name!(filename, String),
+        name!(source, String),
+    ),
+> {
+    TableIterator::new(proto_registry::list().into_iter())
 }
 
 #[cfg(any(test, feature = "pg_test"))]

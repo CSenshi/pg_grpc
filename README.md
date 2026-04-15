@@ -99,8 +99,28 @@ SELECT grpc_call(
 | `grpc_proto_compile()` | Parse all staged files, resolve cross-imports + Google WKTs, and insert every discovered service into the registry. On success, staging is cleared. On failure (e.g. syntax error), staging is preserved so you can fix the bad file and retry. |
 | `grpc_proto_unregister(service_name TEXT) → BOOLEAN` | Remove one compiled service by fully-qualified name (e.g. `"auth.AuthService"`). Returns `true` if it existed. |
 | `grpc_proto_unregister_all()` | Remove every compiled service. Staging untouched. |
+| `grpc_proto_list_staged() → TABLE(filename TEXT, source TEXT)` | List every staged `.proto` file with its source. Empty after a successful `grpc_proto_compile`. |
+| `grpc_proto_list_registered() → TABLE(service_name TEXT, filename TEXT, source TEXT)` | List every registered service along with the filename and source of the `.proto` file that defined it. One row per service — a file with multiple services produces multiple rows sharing the same filename/source. Import-only files (no services) are not listed. |
 
 The staging area and registry are **per-connection** (per backend process). They reset when you reconnect.
+
+#### Inspecting state
+
+Both list functions are set-returning and must be used in a `FROM` clause:
+
+```sql
+-- What's currently staged, waiting to be compiled?
+SELECT filename FROM grpc_proto_list_staged();
+
+-- What services can I call right now?
+SELECT service_name FROM grpc_proto_list_registered();
+
+-- Unique file inventory of the registry (staged-style view)
+SELECT DISTINCT filename, source FROM grpc_proto_list_registered();
+
+-- Which services does a specific file define?
+SELECT service_name FROM grpc_proto_list_registered() WHERE filename = 'auth.proto';
+```
 
 ### Recovery
 

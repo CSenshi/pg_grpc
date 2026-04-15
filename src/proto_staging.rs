@@ -32,6 +32,16 @@ pub fn remove(filename: &str) -> bool {
     PENDING_FILES.write().remove(filename).is_some()
 }
 
+/// Returns `(filename, source)` for every staged file. Order is unspecified
+/// — callers that need determinism should sort the result.
+pub fn list() -> Vec<(String, String)> {
+    PENDING_FILES
+        .read()
+        .iter()
+        .map(|(name, source)| (name.clone(), source.clone()))
+        .collect()
+}
+
 /// Clears the staging area. Called after a successful compile.
 pub fn clear() {
     PENDING_FILES.write().clear();
