@@ -57,8 +57,8 @@ async fn connect(endpoint: &str) -> GrpcResult<Channel> {
         .map_err(|e| GrpcError::Connection(format!("{endpoint}: {e}")))
 }
 
-fn resolve_method<'a>(
-    pool: &'a DescriptorPool,
+fn resolve_method(
+    pool: &DescriptorPool,
     service_name: &str,
     method_name: &str,
 ) -> GrpcResult<MethodDescriptor> {
