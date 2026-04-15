@@ -41,7 +41,6 @@ tokio = { version = "1", features = ["rt", "net", "time"] }
 thiserror = "1"
 
 # Process-global caches (channel + proto descriptor pools)
-once_cell   = "1"
 parking_lot = "0.12"
 
 # Pure-Rust proto compiler for user-supplied .proto source

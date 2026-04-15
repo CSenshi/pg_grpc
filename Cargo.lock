@@ -1247,7 +1247,6 @@ dependencies = [
  "bytes",
  "futures",
  "http",
- "once_cell",
  "parking_lot",
  "pgrx",
  "pgrx-tests",

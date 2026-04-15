@@ -1,10 +1,10 @@
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 // Key is the filename used as an `import` target. Re-staging the same filename overwrites.
-static PENDING_FILES: Lazy<RwLock<HashMap<String, String>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static PENDING_FILES: LazyLock<RwLock<HashMap<String, String>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub fn stage_file(filename: &str, source: &str) {
     PENDING_FILES

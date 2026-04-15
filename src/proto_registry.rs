@@ -1,7 +1,7 @@
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use prost_reflect::DescriptorPool;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 #[derive(Clone)]
 struct RegisteredService {
@@ -11,8 +11,8 @@ struct RegisteredService {
 }
 
 // Keyed by fully-qualified service name (e.g. `"pkg.Service"`).
-static PROTO_REGISTRY: Lazy<RwLock<HashMap<String, RegisteredService>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static PROTO_REGISTRY: LazyLock<RwLock<HashMap<String, RegisteredService>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub fn get_proto(service_name: &str) -> Option<DescriptorPool> {
     PROTO_REGISTRY
