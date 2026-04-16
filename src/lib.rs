@@ -37,6 +37,12 @@ fn grpc_call(
 
 #[pg_extern]
 fn grpc_proto_stage(filename: &str, source: &str) {
+    if filename.trim().is_empty() {
+        pgrx::error!("grpc_proto_stage: filename must not be empty");
+    }
+    if source.trim().is_empty() {
+        pgrx::error!("grpc_proto_stage: source must not be empty");
+    }
     proto_staging::stage_file(filename, source);
 }
 
