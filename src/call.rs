@@ -65,6 +65,17 @@ fn parse_method(method: &str) -> GrpcResult<(String, String)> {
 
 // TODO: cache channels by endpoint to avoid a full TCP+HTTP/2 handshake on every SQL call.
 async fn connect(endpoint: &str) -> GrpcResult<Channel> {
+    if let Some(rest) = endpoint.strip_prefix("https://") {
+        return Err(GrpcError::Connection(format!(
+            "endpoint must be 'host:port' without a scheme (TLS is not yet supported): \
+             got 'https://{rest}'"
+        )));
+    }
+    if endpoint.starts_with("http://") {
+        return Err(GrpcError::Connection(format!(
+            "endpoint must be 'host:port' without a scheme: got '{endpoint}'"
+        )));
+    }
     Channel::from_shared(format!("http://{endpoint}"))
         .map_err(|e| GrpcError::Connection(e.to_string()))?
         .connect()
