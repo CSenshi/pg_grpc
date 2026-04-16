@@ -13,8 +13,12 @@ permissions:
   id-token: write
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   build-linux-gnu:
     name: release artifacts
+    needs: [test]
     strategy:
       matrix:
         extension_name:
