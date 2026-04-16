@@ -16,7 +16,7 @@ fn test_grpc_proto_stage_single_file() {
     crate::grpc_proto_compile();
 
     let result = crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "via-registry"})),
         None,
@@ -49,7 +49,7 @@ fn test_grpc_proto_stage_cross_import() {
     crate::grpc_proto_compile();
 
     let result = crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "multi-file"})),
         None,
@@ -87,7 +87,7 @@ fn test_grpc_proto_unstage_recovers_bad_file() {
     crate::grpc_proto_compile();
 
     let result = crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "recovered"})),
         None,

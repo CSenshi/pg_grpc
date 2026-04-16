@@ -3,7 +3,7 @@ fn test_grpc_call_dummyunary() {
     // Force the reflection path.
     crate::grpc_proto_unregister_all();
     let result = crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         None,
@@ -17,7 +17,7 @@ fn test_grpc_call_dummyunary() {
 )]
 fn test_grpc_call_invalid_method_path() {
     crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "no-slash-here",
         pgrx::JsonB(serde_json::json!({})),
         None,
@@ -32,7 +32,7 @@ fn test_grpc_call_reflection_disabled_misses_registry() {
     crate::grpc_proto_unregister_all();
     crate::grpc_proto_unstage_all();
     crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         None,
@@ -56,7 +56,7 @@ fn test_grpc_call_reflection_disabled_hits_registry() {
     crate::grpc_proto_compile();
 
     let result = crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "no-reflection"})),
         None,
@@ -82,7 +82,7 @@ fn test_grpc_call_method_not_found() {
     );
     crate::grpc_proto_compile();
     crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/NoSuchMethod",
         pgrx::JsonB(serde_json::json!({"f_string": "x"})),
         None,
