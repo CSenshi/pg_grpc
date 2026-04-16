@@ -1,8 +1,9 @@
 [package]
-name        = "pg_grpc"
-version     = "0.2.1"
-edition     = "2021"
-authors     = ["CSenshi"]
+name         = "pg_grpc"
+version      = "0.2.1"
+edition      = "2021"
+rust-version = "1.82"
+authors      = ["CSenshi"]
 description = "PostgreSQL extension for making gRPC calls from SQL, with reflection or user-supplied .proto files."
 license     = "MIT"
 repository  = "https://github.com/CSenshi/pg_grpc"

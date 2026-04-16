@@ -55,9 +55,29 @@ body:
       required: true
 
   - type: input
+    id: rust-version
+    attributes:
+      label: Rust Version
+      description: "Output of `rustc --version`."
+      placeholder: "rustc 1.82.0 (f6e511eec 2024-10-15)"
+    validations:
+      required: false
+
+  - type: input
     id: os
     attributes:
       label: OS
       placeholder: "Ubuntu 24.04 / macOS 15 / etc."
     validations:
       required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install Method
+      options:
+        - Built from source (cargo pgrx install)
+        - .deb package from a release
+        - Other
+    validations:
+      required: false
