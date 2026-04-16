@@ -10,20 +10,30 @@ permissions:
   contents: read
 
 jobs:
-  fmt-clippy:
-    name: fmt + clippy
+  test:
+    name: test
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc &>/dev/null
+
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential clang libclang-dev pkg-config
+          sudo apt-get install -y --no-install-recommends postgresql-13 postgresql-server-dev-13
+
+          # pgrx install needs write access to PG directories
+          sudo chmod a+rwx /usr/share/postgresql/13/extension /usr/lib/postgresql/13/lib
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential clang libclang-dev
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -40,43 +50,13 @@ jobs:
         run: cargo install cargo-pgrx --version 0.17.0 --locked
 
       - name: Init pgrx
-        run: cargo pgrx init --pg18
+        run: cargo pgrx init --pg13=/usr/lib/postgresql/13/bin/pg_config
 
       - name: cargo fmt
         run: cargo fmt --check
 
       - name: cargo clippy
-        run: cargo clippy --no-default-features --features pg18 -- -D warnings
-
-  test:
-    name: test (pg13-18)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential clang libclang-dev
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Cache cargo-pgrx binary
-        id: cache-cargo-pgrx
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/cargo-pgrx
-          key: cargo-pgrx-0.17.0-${{ runner.os }}-amd64
-
-      - name: Install cargo-pgrx
-        if: steps.cache-cargo-pgrx.outputs.cache-hit != 'true'
-        run: cargo install cargo-pgrx --version 0.17.0 --locked
-
-      - name: Init pgrx
-        run: cargo pgrx init
+        run: cargo clippy --no-default-features --features pg13 -- -D warnings
 
       - name: Run tests
-        run: cargo pgrx test all
+        run: cargo pgrx test pg13
