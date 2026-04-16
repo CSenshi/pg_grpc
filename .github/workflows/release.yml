@@ -23,7 +23,7 @@ jobs:
           - pg-grpc
         pgrx_version:
           - 0.17.0
-        postgres: [18]
+        postgres: [13, 14, 15, 16, 17, 18]
         box:
           - { runner: ubuntu-24.04, arch: amd64 }
           - { runner: ubuntu-24.04-arm, arch: arm64 }
