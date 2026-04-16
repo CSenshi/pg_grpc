@@ -13,10 +13,40 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: test
+  fmt-clippy:
+    name: fmt + clippy
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential clang libclang-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy --no-default-features --features pg13 -- -D warnings
+
+  test:
+    name: test pg${{ matrix.postgres }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [13, 14, 15, 16, 17, 18]
     steps:
       - uses: actions/checkout@v6
 
@@ -30,16 +60,18 @@ jobs:
 
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential clang libclang-dev pkg-config
-          sudo apt-get install -y --no-install-recommends postgresql-13 postgresql-server-dev-13
+          sudo apt-get install -y --no-install-recommends postgresql-${{ matrix.postgres }} postgresql-server-dev-${{ matrix.postgres }}
 
           # pgrx install needs write access to PG directories
-          sudo chmod a+rwx /usr/share/postgresql/13/extension /usr/lib/postgresql/13/lib
+          sudo chmod a+rwx /usr/share/postgresql/${{ matrix.postgres }}/extension /usr/lib/postgresql/${{ matrix.postgres }}/lib
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: pg${{ matrix.postgres }}
 
       - name: Cache cargo-pgrx binary
         id: cache-cargo-pgrx
@@ -53,13 +85,7 @@ jobs:
         run: cargo install cargo-pgrx --version 0.17.0 --locked
 
       - name: Init pgrx
-        run: cargo pgrx init --pg13=/usr/lib/postgresql/13/bin/pg_config
-
-      - name: cargo fmt
-        run: cargo fmt --check
-
-      - name: cargo clippy
-        run: cargo clippy --no-default-features --features pg13 -- -D warnings
+        run: cargo pgrx init --pg${{ matrix.postgres }}=/usr/lib/postgresql/${{ matrix.postgres }}/bin/pg_config
 
       - name: Run tests
-        run: cargo pgrx test pg13
+        run: cargo pgrx test pg${{ matrix.postgres }}
