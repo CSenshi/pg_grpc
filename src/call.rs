@@ -163,11 +163,11 @@ impl tonic::codec::Decoder for RawDecoder {
         &mut self,
         src: &mut tonic::codec::DecodeBuf<'_>,
     ) -> Result<Option<Bytes>, tonic::Status> {
-        let remaining = src.remaining();
-        if remaining == 0 {
-            return Ok(None);
-        }
-        Ok(Some(src.copy_to_bytes(remaining)))
+        // An empty frame is a valid message (google.protobuf.Empty, or any
+        // proto where every field is at its default). Returning Ok(None) here
+        // makes tonic think the stream ended without a message, which surfaces
+        // as "Missing response message" for the user.
+        Ok(Some(src.copy_to_bytes(src.remaining())))
     }
 }
 
