@@ -15,8 +15,15 @@ fn grpc_call(
     request: pgrx::JsonB,
     _timeout_ms: default!(Option<i64>, "null"),
     use_reflection: default!(Option<bool>, "true"),
+    metadata: default!(Option<pgrx::JsonB>, "null"),
 ) -> pgrx::JsonB {
-    match call::make_grpc_call(endpoint, method, request.0, use_reflection.unwrap_or(true)) {
+    match call::make_grpc_call(
+        endpoint,
+        method,
+        request.0,
+        use_reflection.unwrap_or(true),
+        metadata.map(|j| j.0),
+    ) {
         Ok(value) => pgrx::JsonB(value),
         Err(e) => pgrx::error!("{}", e),
     }

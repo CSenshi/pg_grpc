@@ -4,6 +4,7 @@ use prost_reflect::{
     DescriptorPool, DynamicMessage, MessageDescriptor, MethodDescriptor, SerializeOptions,
 };
 use serde::de::DeserializeSeed as _;
+use tonic::metadata::{AsciiMetadataKey, AsciiMetadataValue};
 use tonic::transport::Channel;
 
 use crate::error::{GrpcError, GrpcResult};
@@ -14,13 +15,20 @@ pub fn make_grpc_call(
     method: &str,
     request_json: serde_json::Value,
     use_reflection: bool,
+    metadata: Option<serde_json::Value>,
 ) -> GrpcResult<serde_json::Value> {
     // pgrx backends are single-threaded; a multi-thread runtime would unsafely cross the Postgres boundary.
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| GrpcError::Connection(e.to_string()))?;
-    rt.block_on(call_async(endpoint, method, request_json, use_reflection))
+    rt.block_on(call_async(
+        endpoint,
+        method,
+        request_json,
+        use_reflection,
+        metadata,
+    ))
 }
 
 async fn call_async(
@@ -28,6 +36,7 @@ async fn call_async(
     method: &str,
     request_json: serde_json::Value,
     use_reflection: bool,
+    metadata: Option<serde_json::Value>,
 ) -> GrpcResult<serde_json::Value> {
     let (service_name, method_name) = parse_method(method)?;
     let channel = connect(endpoint).await?;
@@ -50,7 +59,14 @@ async fn call_async(
     };
     let method_desc = resolve_method(&pool, &service_name, &method_name)?;
     let request_bytes = encode_request(method_desc.input(), request_json)?;
-    let response_bytes = unary_call(channel, &service_name, &method_name, request_bytes).await?;
+    let response_bytes = unary_call(
+        channel,
+        &service_name,
+        &method_name,
+        request_bytes,
+        metadata,
+    )
+    .await?;
     decode_response(method_desc.output(), response_bytes)
 }
 
@@ -102,6 +118,7 @@ async fn unary_call(
     service_name: &str,
     method_name: &str,
     body: Bytes,
+    metadata: Option<serde_json::Value>,
 ) -> GrpcResult<Bytes> {
     let path = format!("/{service_name}/{method_name}")
         .parse::<http::uri::PathAndQuery>()
@@ -112,10 +129,48 @@ async fn unary_call(
         .await
         .map_err(|e| GrpcError::Connection(e.to_string()))?;
 
-    grpc.unary(tonic::Request::new(body), path, RawBytesCodec)
+    let mut request = tonic::Request::new(body);
+    apply_metadata(&mut request, metadata)?;
+
+    grpc.unary(request, path, RawBytesCodec)
         .await
         .map(|r| r.into_inner())
         .map_err(|s| GrpcError::Call(s.to_string()))
+}
+
+pub(crate) fn apply_metadata(
+    request: &mut tonic::Request<Bytes>,
+    metadata: Option<serde_json::Value>,
+) -> GrpcResult<()> {
+    let obj = match metadata {
+        None | Some(serde_json::Value::Null) => return Ok(()),
+        Some(serde_json::Value::Object(m)) => m,
+        Some(_) => return Err(GrpcError::Call("metadata must be a JSON object".into())),
+    };
+
+    let md = request.metadata_mut();
+    for (key, val) in obj {
+        let meta_key = AsciiMetadataKey::from_bytes(key.to_ascii_lowercase().as_bytes())
+            .map_err(|e| GrpcError::Call(format!("metadata key '{key}': {e}")))?;
+
+        // 2 shapes at this level: Array => multi-value (one repeated header per item),
+        // anything else => single value (wrapped so both shapes share the loop below).
+        let items = match val {
+            serde_json::Value::Array(items) => items,
+            other => vec![other],
+        };
+        for item in items {
+            let s = match item {
+                serde_json::Value::Null => continue,
+                serde_json::Value::String(s) => s,
+                other => other.to_string(),
+            };
+            let v = AsciiMetadataValue::try_from(s.as_str())
+                .map_err(|e| GrpcError::Call(format!("metadata '{key}': {e}")))?;
+            md.append(meta_key.clone(), v);
+        }
+    }
+    Ok(())
 }
 
 fn decode_response(desc: MessageDescriptor, bytes: Bytes) -> GrpcResult<serde_json::Value> {
