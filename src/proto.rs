@@ -13,136 +13,73 @@ pub async fn fetch_pool(channel: Channel, service_name: &str) -> GrpcResult<Desc
     // Fall back to v1alpha if the server hasn't implemented v1 yet.
     match fetch_v1(channel.clone(), service_name).await {
         Ok(pool) => Ok(pool),
-        Err(ReflectErr::Unimplemented) => fetch_v1alpha(channel, service_name).await,
-        Err(ReflectErr::Other(e)) => Err(e),
-    }
-}
-
-enum ReflectErr {
-    Unimplemented,
-    Other(GrpcError),
-}
-
-fn classify(s: tonic::Status, ctx: &'static str) -> ReflectErr {
-    if s.code() == tonic::Code::Unimplemented {
-        ReflectErr::Unimplemented
-    } else {
-        ReflectErr::Other(GrpcError::Proto(format!("{ctx}: {s}")))
-    }
-}
-
-async fn fetch_v1(channel: Channel, service_name: &str) -> Result<DescriptorPool, ReflectErr> {
-    use tonic_reflection::pb::v1::{
-        server_reflection_client::ServerReflectionClient,
-        server_reflection_request::MessageRequest, server_reflection_response::MessageResponse,
-        ServerReflectionRequest,
-    };
-
-    let mut client = ServerReflectionClient::new(channel);
-    let request = ServerReflectionRequest {
-        host: String::new(),
-        message_request: Some(MessageRequest::FileContainingSymbol(
-            service_name.to_string(),
-        )),
-    };
-    let mut resp_stream = client
-        .server_reflection_info(tonic::Request::new(stream::iter(vec![request])))
-        .await
-        .map_err(|s| classify(s, "reflection call failed"))?
-        .into_inner();
-
-    let mut pool = DescriptorPool::new();
-    while let Some(msg) = resp_stream
-        .message()
-        .await
-        .map_err(|s| classify(s, "reflection stream error"))?
-    {
-        match msg.message_response {
-            Some(MessageResponse::FileDescriptorResponse(fdr)) => {
-                for bytes in fdr.file_descriptor_proto {
-                    let fdp = FileDescriptorProto::decode(bytes.as_ref()).map_err(|e| {
-                        ReflectErr::Other(GrpcError::Proto(format!(
-                            "decode FileDescriptorProto: {e}"
-                        )))
-                    })?;
-                    pool.add_file_descriptor_proto(fdp).map_err(|e| {
-                        ReflectErr::Other(GrpcError::Proto(format!(
-                            "add to descriptor pool: {e}"
-                        )))
-                    })?;
-                }
-            }
-            Some(MessageResponse::ErrorResponse(e)) => {
-                return Err(ReflectErr::Other(GrpcError::Proto(format!(
-                    "reflection error (code {}): {}",
-                    e.error_code, e.error_message
-                ))));
-            }
-            _ => {}
+        Err(s) if s.code() == tonic::Code::Unimplemented => {
+            fetch_v1alpha(channel, service_name).await
         }
+        Err(s) => Err(s),
     }
-
-    if pool.services().count() == 0 {
-        return Err(ReflectErr::Other(GrpcError::Proto(format!(
-            "reflection returned no descriptors for service: {service_name}"
-        ))));
-    }
-    Ok(pool)
+    .map_err(|s| GrpcError::Proto(format!("reflection: {}", s.message())))
 }
 
-async fn fetch_v1alpha(channel: Channel, service_name: &str) -> GrpcResult<DescriptorPool> {
-    use tonic_reflection::pb::v1alpha::{
-        server_reflection_client::ServerReflectionClient,
-        server_reflection_request::MessageRequest, server_reflection_response::MessageResponse,
-        ServerReflectionRequest,
-    };
+macro_rules! define_fetch {
+    ($name:ident, $pb:path) => {
+        async fn $name(
+            channel: Channel,
+            service_name: &str,
+        ) -> Result<DescriptorPool, tonic::Status> {
+            use $pb::{
+                server_reflection_client::ServerReflectionClient,
+                server_reflection_request::MessageRequest,
+                server_reflection_response::MessageResponse, ServerReflectionRequest,
+            };
 
-    let mut client = ServerReflectionClient::new(channel);
-    let request = ServerReflectionRequest {
-        host: String::new(),
-        message_request: Some(MessageRequest::FileContainingSymbol(
-            service_name.to_string(),
-        )),
-    };
-    let mut resp_stream = client
-        .server_reflection_info(tonic::Request::new(stream::iter(vec![request])))
-        .await
-        .map_err(|e| GrpcError::Proto(format!("reflection call failed: {e}")))?
-        .into_inner();
+            let mut client = ServerReflectionClient::new(channel);
+            let request = ServerReflectionRequest {
+                host: String::new(),
+                message_request: Some(MessageRequest::FileContainingSymbol(
+                    service_name.to_string(),
+                )),
+            };
+            let mut resp_stream = client
+                .server_reflection_info(tonic::Request::new(stream::iter(vec![request])))
+                .await?
+                .into_inner();
 
-    let mut pool = DescriptorPool::new();
-    while let Some(msg) = resp_stream
-        .message()
-        .await
-        .map_err(|e| GrpcError::Proto(format!("reflection stream error: {e}")))?
-    {
-        match msg.message_response {
-            Some(MessageResponse::FileDescriptorResponse(fdr)) => {
-                for bytes in fdr.file_descriptor_proto {
-                    let fdp = FileDescriptorProto::decode(bytes.as_ref()).map_err(|e| {
-                        GrpcError::Proto(format!("decode FileDescriptorProto: {e}"))
-                    })?;
-                    pool.add_file_descriptor_proto(fdp)
-                        .map_err(|e| GrpcError::Proto(format!("add to descriptor pool: {e}")))?;
+            let mut pool = DescriptorPool::new();
+            while let Some(msg) = resp_stream.message().await? {
+                match msg.message_response {
+                    Some(MessageResponse::FileDescriptorResponse(fdr)) => {
+                        for bytes in fdr.file_descriptor_proto {
+                            let fdp = FileDescriptorProto::decode(bytes.as_ref()).map_err(|e| {
+                                tonic::Status::internal(format!("decode FileDescriptorProto: {e}"))
+                            })?;
+                            pool.add_file_descriptor_proto(fdp).map_err(|e| {
+                                tonic::Status::internal(format!("add to descriptor pool: {e}"))
+                            })?;
+                        }
+                    }
+                    Some(MessageResponse::ErrorResponse(e)) => {
+                        return Err(tonic::Status::internal(format!(
+                            "reflection error (code {}): {}",
+                            e.error_code, e.error_message
+                        )));
+                    }
+                    _ => {}
                 }
             }
-            Some(MessageResponse::ErrorResponse(e)) => {
-                return Err(GrpcError::Proto(format!(
-                    "reflection error (code {}): {}",
-                    e.error_code, e.error_message
+
+            if pool.services().count() == 0 {
+                return Err(tonic::Status::internal(format!(
+                    "reflection returned no descriptors for service: {service_name}"
                 )));
             }
-            _ => {}
+            Ok(pool)
         }
-    }
-
-    if pool.services().count() == 0 {
-        return Err(GrpcError::Proto(format!(
-            "reflection returned no descriptors for service: {service_name}"
-        )));
-    }
-    Ok(pool)
+    };
 }
+
+define_fetch!(fetch_v1, tonic_reflection::pb::v1);
+define_fetch!(fetch_v1alpha, tonic_reflection::pb::v1alpha);
 
 // Imports resolve against the filename keys in `files` and against protox's
 // bundled Google Well-Known Types. No filesystem or network access.
