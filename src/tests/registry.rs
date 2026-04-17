@@ -47,7 +47,7 @@ fn test_registry_precedence_over_reflection() {
     crate::grpc_proto_compile();
 
     let result = crate::grpc_call(
-        "grpcb.in:9000",
+        &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"renamed_field": "winner"})),
         None,

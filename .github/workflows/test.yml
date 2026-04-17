@@ -17,6 +17,13 @@ jobs:
     name: test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    services:
+      grpcbin:
+        image: moul/grpcbin
+        ports:
+          - 9000:9000
+    env:
+      GRPCBIN_ENDPOINT: localhost:9000
     steps:
       - uses: actions/checkout@v6
 
