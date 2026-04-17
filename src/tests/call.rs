@@ -38,8 +38,8 @@ fn test_grpc_call_reflection_disabled_misses_registry() {
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         None,
-        Some(false),
         None,
+        Some(false),
     );
 }
 
@@ -63,8 +63,8 @@ fn test_grpc_call_reflection_disabled_hits_registry() {
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "no-reflection"})),
         None,
-        Some(false),
         None,
+        Some(false),
     );
     assert_eq!(result.0["f_string"], "no-reflection");
 
@@ -102,12 +102,12 @@ fn test_grpc_call_with_metadata_smoke() {
         &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
-        None,
-        None,
         Some(pgrx::JsonB(serde_json::json!({
             "authorization": "Bearer tok",
             "x-trace-id": "abc"
         }))),
+        None,
+        None,
     );
     assert_eq!(result.0["f_string"], "hello");
 }

@@ -13,9 +13,9 @@ fn grpc_call(
     endpoint: &str,
     method: &str,
     request: pgrx::JsonB,
+    metadata: default!(Option<pgrx::JsonB>, "null"),
     _timeout_ms: default!(Option<i64>, "null"),
     use_reflection: default!(Option<bool>, "true"),
-    metadata: default!(Option<pgrx::JsonB>, "null"),
 ) -> pgrx::JsonB {
     match call::make_grpc_call(
         endpoint,
