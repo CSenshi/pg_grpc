@@ -110,9 +110,13 @@ fn grpc_call(
     endpoint: &str,
     method: &str,
     request: pgrx::JsonB,
-    timeout_ms: default!(Option<i64>, "null"),   // accepted, not yet wired up
+    metadata: default!(Option<pgrx::JsonB>, "null"),   // gRPC metadata / headers
+    timeout_ms: default!(Option<i64>, "null"),         // accepted, not yet wired up
+    use_reflection: default!(Option<bool>, "true"),
 ) -> pgrx::JsonB
 ```
+
+`metadata` is a JSON object whose values are strings or arrays of strings. Keys are silently lowercased. Keys ending in `-bin` (binary metadata) are rejected in v1.
 
 User-supplied proto management (all `#[pg_extern]` in lib.rs):
 
@@ -285,7 +289,7 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 
 ```sql
 -- gRPC call
-grpc_call(endpoint TEXT, method TEXT, request JSONB [, timeout_ms BIGINT]) RETURNS JSONB
+grpc_call(endpoint TEXT, method TEXT, request JSONB [, metadata JSONB] [, timeout_ms BIGINT] [, use_reflection BOOLEAN]) RETURNS JSONB
 
 -- Staging
 grpc_proto_stage(filename TEXT, source TEXT) RETURNS VOID
