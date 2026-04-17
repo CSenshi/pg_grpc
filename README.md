@@ -1,5 +1,7 @@
 # pg_grpc
 
+[![Test](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml/badge.svg)](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml)
+
 Make gRPC calls directly from PostgreSQL SQL.
 
 
