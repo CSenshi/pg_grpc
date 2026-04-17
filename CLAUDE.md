@@ -1,6 +1,6 @@
 # Project: pg_grpc
 
-PostgreSQL extension for making gRPC calls from SQL. Built with Rust and pgrx 0.17. Supports Postgres 13–18.
+PostgreSQL extension for making gRPC calls from SQL. Built with Rust and pgrx 0.18. Supports Postgres 13–18.
 
 ## Quick Start
 
@@ -50,7 +50,7 @@ pg_grpc.control         # Extension metadata (name, version, schema, superuser)
 
 ## Dependencies
 
-- **pgrx 0.17** — Postgres extension framework
+- **pgrx 0.18** — Postgres extension framework
 - **tonic 0.14 / tonic-reflection 0.14** — gRPC client, reflection
 - **prost 0.14 / prost-types 0.14 / prost-reflect 0.16** — protobuf encode/decode + dynamic schema
 - **protox 0.9** — pure-Rust `.proto` compiler (used by `compile_proto_files`)

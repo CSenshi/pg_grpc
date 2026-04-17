@@ -53,11 +53,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-pgrx
-          key: cargo-pgrx-0.17.0-${{ runner.os }}-amd64
+          key: cargo-pgrx-0.18.0-${{ runner.os }}-amd64
 
       - name: Install cargo-pgrx
         if: steps.cache-cargo-pgrx.outputs.cache-hit != 'true'
-        run: cargo install cargo-pgrx --version 0.17.0 --locked
+        run: cargo install cargo-pgrx --version 0.18.0 --locked
 
       - name: Init pgrx
         run: cargo pgrx init --pg13=/usr/lib/postgresql/13/bin/pg_config
