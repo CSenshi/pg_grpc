@@ -75,13 +75,15 @@ async fn call_async(
     decode_response(method_desc.output(), response_bytes)
 }
 
-fn parse_method(method: &str) -> GrpcResult<(String, String)> {
+pub(crate) fn parse_method(method: &str) -> GrpcResult<(String, String)> {
     let invalid = || {
         GrpcError::Proto(format!(
             "invalid method path (expected 'Service/Method'): {method}"
         ))
     };
     let (service, method_name) = method.rsplit_once('/').ok_or_else(invalid)?;
+    let service = service.trim();
+    let method_name = method_name.trim();
     if service.is_empty() || method_name.is_empty() || service.contains('/') {
         return Err(invalid());
     }
