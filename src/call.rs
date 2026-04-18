@@ -16,19 +16,24 @@ pub fn make_grpc_call(
     request_json: serde_json::Value,
     use_reflection: bool,
     metadata: Option<serde_json::Value>,
+    timeout_ms: u64,
 ) -> GrpcResult<serde_json::Value> {
     // pgrx backends are single-threaded; a multi-thread runtime would unsafely cross the Postgres boundary.
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| GrpcError::Connection(e.to_string()))?;
-    rt.block_on(call_async(
-        endpoint,
-        method,
-        request_json,
-        use_reflection,
-        metadata,
-    ))
+    rt.block_on(async {
+        match tokio::time::timeout(
+            std::time::Duration::from_millis(timeout_ms),
+            call_async(endpoint, method, request_json, use_reflection, metadata),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(GrpcError::Timeout(timeout_ms)),
+        }
+    })
 }
 
 async fn call_async(

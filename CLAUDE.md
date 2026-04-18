@@ -111,7 +111,7 @@ fn grpc_call(
     method: &str,
     request: pgrx::JsonB,
     metadata: default!(Option<pgrx::JsonB>, "null"),   // gRPC metadata / headers
-    timeout_ms: default!(Option<i64>, "null"),         // accepted, not yet wired up
+    timeout_ms: default!(Option<i64>, "null"),         // defaults to 30_000ms; must be > 0
     use_reflection: default!(Option<bool>, "true"),
 ) -> pgrx::JsonB
 ```
@@ -282,7 +282,6 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 - **HTTP only** — TLS/mTLS not supported (no `tonic::transport::ClientTlsConfig` wiring yet)
 - **Unary RPCs only** — streaming methods not supported
 - **No connection caching** — fresh TCP + HTTP/2 handshake on every `grpc_call`
-- **`timeout_ms` is accepted but ignored**
 - **Multi-file proto imports must use filenames that match staging keys** — `import "common.proto";` only resolves if someone ran `grpc_proto_stage('common.proto', ...)`
 
 ## API Summary

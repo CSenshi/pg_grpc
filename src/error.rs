@@ -10,6 +10,8 @@ pub enum GrpcError {
     ProtoCompile(String),
     #[error("gRPC call failed: {0}")]
     Call(String),
+    #[error("Request timeout: {0}ms")]
+    Timeout(u64),
 }
 
 pub type GrpcResult<T> = Result<T, GrpcError>;

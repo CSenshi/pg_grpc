@@ -34,7 +34,7 @@ grpc_call(
     method         TEXT,
     request        JSONB,
     metadata       JSONB   DEFAULT NULL,  -- optional gRPC metadata / headers
-    timeout_ms     BIGINT  DEFAULT NULL,  -- accepted but not yet implemented
+    timeout_ms     BIGINT  DEFAULT NULL,  -- defaults to 30_000ms; must be > 0
     use_reflection BOOLEAN DEFAULT TRUE
 ) RETURNS JSONB
 ```
@@ -105,6 +105,7 @@ All errors raise a PostgreSQL `ERROR` and abort the current statement:
 | `Proto error: …`         | Reflection failed, symbol not found, or JSON ↔ protobuf encode/decode error |
 | `Proto compile error: …` | `grpc_proto_compile` failed to parse/resolve the staged files               |
 | `gRPC call failed: …`    | Server returned a non-OK gRPC status                                        |
+| `Request timeout: …ms`   | The call (connect + reflection + unary) did not finish within `timeout_ms`  |
 
 ## Limitations
 
