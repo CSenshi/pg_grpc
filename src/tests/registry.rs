@@ -52,6 +52,7 @@ fn test_registry_precedence_over_reflection() {
         pgrx::JsonB(serde_json::json!({"renamed_field": "winner"})),
         None,
         None,
+        None,
     );
     assert_eq!(result.0["renamed_field"], "winner");
     assert!(

@@ -33,6 +33,7 @@ grpc_call(
     endpoint       TEXT,
     method         TEXT,
     request        JSONB,
+    metadata       JSONB   DEFAULT NULL,  -- optional gRPC metadata / headers
     timeout_ms     BIGINT  DEFAULT NULL,  -- accepted but not yet implemented
     use_reflection BOOLEAN DEFAULT TRUE
 ) RETURNS JSONB
