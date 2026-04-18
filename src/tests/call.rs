@@ -236,3 +236,41 @@ fn test_metadata_non_object() {
     crate::call::apply_metadata(&mut req, Some(serde_json::json!([1, 2, 3])))
         .expect_err("array at top must error");
 }
+
+#[pg_test(error = "Request timeout: 200ms")]
+fn test_grpc_call_timeout_fires() {
+    // 10.255.255.1 is in TEST-NET-1-adjacent unroutable space; the connect
+    // will hang long past our 200ms budget, forcing the timeout path.
+    crate::grpc_call(
+        "10.255.255.1:50051",
+        "x.Y/Z",
+        pgrx::JsonB(serde_json::json!({})),
+        None,
+        Some(200),
+        None,
+    );
+}
+
+#[pg_test(error = "timeout_ms must be positive (got 0)")]
+fn test_grpc_call_timeout_zero_rejected() {
+    crate::grpc_call(
+        &grpcbin_endpoint(),
+        "grpcbin.GRPCBin/DummyUnary",
+        pgrx::JsonB(serde_json::json!({"f_string": "hi"})),
+        None,
+        Some(0),
+        None,
+    );
+}
+
+#[pg_test(error = "timeout_ms must be positive (got -5)")]
+fn test_grpc_call_timeout_negative_rejected() {
+    crate::grpc_call(
+        &grpcbin_endpoint(),
+        "grpcbin.GRPCBin/DummyUnary",
+        pgrx::JsonB(serde_json::json!({"f_string": "hi"})),
+        None,
+        Some(-5),
+        None,
+    );
+}

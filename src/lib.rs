@@ -14,15 +14,21 @@ fn grpc_call(
     method: &str,
     request: pgrx::JsonB,
     metadata: default!(Option<pgrx::JsonB>, "null"),
-    _timeout_ms: default!(Option<i64>, "null"),
+    timeout_ms: default!(Option<i64>, "null"),
     use_reflection: default!(Option<bool>, "true"),
 ) -> pgrx::JsonB {
+    let timeout_ms = match timeout_ms {
+        Some(v) if v <= 0 => pgrx::error!("timeout_ms must be positive (got {})", v),
+        Some(v) => v as u64,
+        None => 30_000,
+    };
     match call::make_grpc_call(
         endpoint,
         method,
         request.0,
         use_reflection.unwrap_or(true),
         metadata.map(|j| j.0),
+        timeout_ms,
     ) {
         Ok(value) => pgrx::JsonB(value),
         Err(e) => pgrx::error!("{}", e),
