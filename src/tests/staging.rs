@@ -150,3 +150,58 @@ fn test_unstage_nonexistent_returns_false() {
         "unstaging a file that was never staged should return false"
     );
 }
+
+#[pg_test]
+fn test_validate_stage_input_accepts_normal() {
+    crate::validate_stage_input("a.proto", r#"syntax = "proto3";"#).unwrap();
+}
+
+#[pg_test]
+fn test_validate_stage_input_rejects_empty_filename() {
+    crate::validate_stage_input("", "x").expect_err("empty filename must fail");
+}
+
+#[pg_test]
+fn test_validate_stage_input_rejects_whitespace_filename() {
+    crate::validate_stage_input("   ", "x").expect_err("whitespace filename must fail");
+}
+
+#[pg_test]
+fn test_validate_stage_input_rejects_tab_newline_filename() {
+    crate::validate_stage_input("\t\n", "x").expect_err("tab/newline filename must fail");
+}
+
+#[pg_test]
+fn test_validate_stage_input_rejects_empty_source() {
+    crate::validate_stage_input("a.proto", "").expect_err("empty source must fail");
+}
+
+#[pg_test]
+fn test_validate_stage_input_rejects_whitespace_source() {
+    crate::validate_stage_input("a.proto", "   ").expect_err("whitespace source must fail");
+}
+
+#[pg_test]
+fn test_validate_stage_input_rejects_tab_newline_source() {
+    crate::validate_stage_input("a.proto", "\t\n").expect_err("tab/newline source must fail");
+}
+
+#[pg_test(error = "Proto compile error: grpc_proto_stage: filename must not be empty")]
+fn test_grpc_proto_stage_empty_filename_errors() {
+    crate::grpc_proto_stage("", r#"syntax = "proto3";"#);
+}
+
+#[pg_test(error = "Proto compile error: grpc_proto_stage: filename must not be empty")]
+fn test_grpc_proto_stage_whitespace_filename_errors() {
+    crate::grpc_proto_stage("   ", r#"syntax = "proto3";"#);
+}
+
+#[pg_test(error = "Proto compile error: grpc_proto_stage: source must not be empty")]
+fn test_grpc_proto_stage_empty_source_errors() {
+    crate::grpc_proto_stage("a.proto", "");
+}
+
+#[pg_test(error = "Proto compile error: grpc_proto_stage: source must not be empty")]
+fn test_grpc_proto_stage_whitespace_source_errors() {
+    crate::grpc_proto_stage("a.proto", "  \t\n ");
+}
