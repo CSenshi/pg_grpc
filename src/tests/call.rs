@@ -274,3 +274,65 @@ fn test_grpc_call_timeout_negative_rejected() {
         None,
     );
 }
+
+#[pg_test]
+fn test_parse_method_accepts_valid() {
+    let (service, method) = crate::call::parse_method("pkg.Service/Method").unwrap();
+    assert_eq!(service, "pkg.Service");
+    assert_eq!(method, "Method");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_empty() {
+    crate::call::parse_method("").expect_err("empty must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_no_slash() {
+    crate::call::parse_method("Service").expect_err("missing slash must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_bare_slash() {
+    crate::call::parse_method("/").expect_err("bare slash must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_empty_service() {
+    crate::call::parse_method("/Method").expect_err("empty service must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_empty_method() {
+    crate::call::parse_method("Service/").expect_err("empty method must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_extra_slashes() {
+    crate::call::parse_method("a/b/c").expect_err("extra slashes must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_leading_slash() {
+    crate::call::parse_method("/foo/bar").expect_err("leading slash must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_whitespace_only() {
+    crate::call::parse_method(" / ").expect_err("whitespace around slash must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_whitespace_service() {
+    crate::call::parse_method(" /Method").expect_err("whitespace service must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_whitespace_method() {
+    crate::call::parse_method("Service/ ").expect_err("whitespace method must fail");
+}
+
+#[pg_test]
+fn test_parse_method_rejects_tabs_and_newlines() {
+    crate::call::parse_method("\t/\n").expect_err("tab/newline around slash must fail");
+}
