@@ -8,6 +8,8 @@ mod proto;
 mod proto_registry;
 mod proto_staging;
 
+use crate::error::{GrpcError, GrpcResult};
+
 #[pg_extern]
 fn grpc_call(
     endpoint: &str,
@@ -37,7 +39,24 @@ fn grpc_call(
 
 #[pg_extern]
 fn grpc_proto_stage(filename: &str, source: &str) {
-    proto_staging::stage_file(filename, source);
+    match validate_stage_input(filename, source) {
+        Ok(()) => proto_staging::stage_file(filename, source),
+        Err(e) => pgrx::error!("{}", e),
+    }
+}
+
+pub(crate) fn validate_stage_input(filename: &str, source: &str) -> GrpcResult<()> {
+    if filename.trim().is_empty() {
+        return Err(GrpcError::ProtoCompile(
+            "grpc_proto_stage: filename must not be empty".to_string(),
+        ));
+    }
+    if source.trim().is_empty() {
+        return Err(GrpcError::ProtoCompile(
+            "grpc_proto_stage: source must not be empty".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 #[pg_extern]
