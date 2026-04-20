@@ -4,27 +4,7 @@
 
 Make gRPC calls directly from PostgreSQL SQL.
 
-
-```sql
--- named
-SELECT grpc_call(
-    endpoint => 'grpcb.in:9000',
-    method   => 'grpcbin.GRPCBin/DummyUnary',
-    request  => '{"f_string": "hello"}'::jsonb
-);
-
--- positional
-SELECT grpc_call('grpcb.in:9000', 'grpcbin.GRPCBin/DummyUnary', '{"f_string": "hello"}'::jsonb);
-```
-
-Both return:
-
-```
-       grpc_call
------------------------
- {"f_string": "hello"}
-(1 row)
-```
+![pg_grpc demo](docs/demo.gif)
 
 ### `grpc_call` signature
 
