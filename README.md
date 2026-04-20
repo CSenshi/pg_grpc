@@ -1,25 +1,21 @@
+<div align="center">
+
 # pg_grpc
 
-[![Test](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml/badge.svg)](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml)
+**Make gRPC calls directly from PostgreSQL SQL.**
 
-Make gRPC calls directly from PostgreSQL SQL.
+[![Test](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml/badge.svg)](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/CSenshi/pg_grpc?logo=github)](https://github.com/CSenshi/pg_grpc/releases/latest)
+[![License](https://img.shields.io/github/license/CSenshi/pg_grpc)](LICENSE)
+[![Postgres](https://img.shields.io/badge/postgres-13%E2%80%9318-316192?logo=postgresql&logoColor=white)](#)
+[![Rust](https://img.shields.io/badge/rust-2024-dea584?logo=rust&logoColor=white)](#)
 
 ![pg_grpc demo](docs/demo.gif)
 
-### `grpc_call` signature
+</div>
 
-```sql
-grpc_call(
-    endpoint       TEXT,
-    method         TEXT,
-    request        JSONB,
-    metadata       JSONB   DEFAULT NULL,  -- optional gRPC metadata / headers
-    timeout_ms     BIGINT  DEFAULT NULL,  -- defaults to 30_000ms; must be > 0
-    use_reflection BOOLEAN DEFAULT TRUE
-) RETURNS JSONB
-```
 
-Returns the response as `JSONB` with proto field names (snake_case).
+`pg_grpc` turns any gRPC service into a first-class SQL function call. Invoke RPCs from triggers, materialized views, scheduled jobs or ad-hoc queries - no codegen, no middleware, no app-layer glue.
 
 ## Quickstart: stage protos and call
 
