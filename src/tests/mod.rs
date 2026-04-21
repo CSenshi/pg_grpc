@@ -11,6 +11,7 @@ mod tests {
     }
 
     include!("call.rs");
+    include!("channel_cache.rs");
     include!("compile.rs");
     include!("endpoint.rs");
     include!("list.rs");
