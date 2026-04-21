@@ -7,7 +7,7 @@ fn test_channel_cache_first_lookup_stores_channel() {
         .unwrap();
     let endpoint = grpcbin_endpoint();
     rt.block_on(async {
-        crate::channel_cache::get_or_connect(&endpoint)
+        crate::channel_cache::get_or_connect(&endpoint, None)
             .await
             .expect("first lookup should connect");
     });
@@ -24,10 +24,10 @@ fn test_channel_cache_second_lookup_is_cache_hit() {
         .unwrap();
     let endpoint = grpcbin_endpoint();
     rt.block_on(async {
-        crate::channel_cache::get_or_connect(&endpoint)
+        crate::channel_cache::get_or_connect(&endpoint, None)
             .await
             .expect("first lookup should connect");
-        crate::channel_cache::get_or_connect(&endpoint)
+        crate::channel_cache::get_or_connect(&endpoint, None)
             .await
             .expect("second lookup should hit cache");
     });

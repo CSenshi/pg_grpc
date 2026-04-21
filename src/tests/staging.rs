@@ -22,6 +22,7 @@ fn test_grpc_proto_stage_single_file() {
         None,
         None,
         None,
+        None,
     );
     assert_eq!(result.0["f_string"], "via-registry");
 }
@@ -53,6 +54,7 @@ fn test_grpc_proto_stage_cross_import() {
         &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "multi-file"})),
+        None,
         None,
         None,
         None,
@@ -92,6 +94,7 @@ fn test_grpc_proto_unstage_recovers_bad_file() {
         &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "recovered"})),
+        None,
         None,
         None,
         None,

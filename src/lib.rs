@@ -30,11 +30,20 @@ fn grpc_call(
     metadata: default!(Option<pgrx::JsonB>, "null"),
     timeout_ms: default!(Option<i64>, "null"),
     use_reflection: default!(Option<bool>, "true"),
+    tls: default!(Option<pgrx::JsonB>, "null"),
 ) -> pgrx::JsonB {
     let timeout_ms = match timeout_ms {
         Some(v) if v <= 0 => pgrx::error!("timeout_ms must be positive (got {})", v),
         Some(v) => v as u64,
         None => 30_000,
+    };
+    let tls_cfg = match tls {
+        None => None,
+        Some(pgrx::JsonB(serde_json::Value::Null)) => None,
+        Some(pgrx::JsonB(v)) => match tls::TlsConfig::parse(&v) {
+            Ok(cfg) => Some(cfg),
+            Err(e) => pgrx::error!("{}", e),
+        },
     };
     match call::make_grpc_call(
         endpoint,
@@ -43,6 +52,7 @@ fn grpc_call(
         use_reflection.unwrap_or(true),
         metadata.map(|j| j.0),
         timeout_ms,
+        tls_cfg,
     ) {
         Ok(value) => pgrx::JsonB(value),
         Err(e) => pgrx::error!("{}", e),

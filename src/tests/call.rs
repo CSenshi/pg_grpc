@@ -9,6 +9,7 @@ fn test_grpc_call_dummyunary() {
         None,
         None,
         None,
+        None,
     );
     assert_eq!(result.0["f_string"], "hello");
 }
@@ -21,6 +22,7 @@ fn test_grpc_call_invalid_method_path() {
         &grpcbin_endpoint(),
         "no-slash-here",
         pgrx::JsonB(serde_json::json!({})),
+        None,
         None,
         None,
         None,
@@ -40,6 +42,7 @@ fn test_grpc_call_reflection_disabled_misses_registry() {
         None,
         None,
         Some(false),
+        None,
     );
 }
 
@@ -65,6 +68,7 @@ fn test_grpc_call_reflection_disabled_hits_registry() {
         None,
         None,
         Some(false),
+        None,
     );
     assert_eq!(result.0["f_string"], "no-reflection");
 
@@ -92,6 +96,7 @@ fn test_grpc_call_method_not_found() {
         None,
         None,
         None,
+        None,
     );
 }
 
@@ -106,6 +111,7 @@ fn test_grpc_call_with_metadata_smoke() {
             "authorization": "Bearer tok",
             "x-trace-id": "abc"
         }))),
+        None,
         None,
         None,
     );
@@ -248,6 +254,7 @@ fn test_grpc_call_timeout_fires() {
         None,
         Some(200),
         None,
+        None,
     );
 }
 
@@ -260,6 +267,7 @@ fn test_grpc_call_timeout_zero_rejected() {
         None,
         Some(0),
         None,
+        None,
     );
 }
 
@@ -271,6 +279,7 @@ fn test_grpc_call_timeout_negative_rejected() {
         pgrx::JsonB(serde_json::json!({"f_string": "hi"})),
         None,
         Some(-5),
+        None,
         None,
     );
 }
