@@ -3,6 +3,7 @@ use pgrx::prelude::*;
 ::pgrx::pg_module_magic!(name, version);
 
 mod call;
+mod endpoint;
 mod error;
 mod proto;
 mod proto_registry;

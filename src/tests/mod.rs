@@ -12,6 +12,7 @@ mod tests {
 
     include!("call.rs");
     include!("compile.rs");
+    include!("endpoint.rs");
     include!("list.rs");
     include!("registry.rs");
     include!("staging.rs");
