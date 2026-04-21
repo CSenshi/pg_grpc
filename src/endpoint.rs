@@ -7,5 +7,15 @@ pub fn validate_endpoint(endpoint: &str) -> GrpcResult<String> {
             "endpoint must not be empty".to_string(),
         ));
     }
+    if trimmed.contains("://") {
+        return Err(GrpcError::Connection(format!(
+            "endpoint must not contain scheme (found '://'): {trimmed}"
+        )));
+    }
+    if trimmed.contains('/') {
+        return Err(GrpcError::Connection(format!(
+            "endpoint must not contain path (found '/'): {trimmed}"
+        )));
+    }
     Ok(trimmed.to_owned())
 }
