@@ -11,6 +11,15 @@ mod proto_registry;
 mod proto_staging;
 mod tls;
 
+// Called by Postgres once per backend when the extension library is first
+// loaded. Installs the rustls `ring` crypto provider so the first TLS
+// handshake cannot trigger a lazy-install panic or race. install_default
+// returns Err if a provider was already installed — harmless, ignored.
+#[pg_guard]
+pub extern "C-unwind" fn _PG_init() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 use crate::error::{GrpcError, GrpcResult};
 
 #[pg_extern]
