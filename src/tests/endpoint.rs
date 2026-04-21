@@ -51,3 +51,39 @@ fn test_validate_endpoint_rejects_path() {
 fn test_validate_endpoint_rejects_trailing_slash() {
     crate::endpoint::validate_endpoint("localhost:50051/").expect_err("trailing slash must fail");
 }
+
+#[pg_test]
+fn test_validate_endpoint_accepts_ipv6_bracketed() {
+    let got = crate::endpoint::validate_endpoint("[::1]:50051").unwrap();
+    assert_eq!(got, "[::1]:50051");
+}
+
+#[pg_test]
+fn test_validate_endpoint_accepts_hostname() {
+    let got = crate::endpoint::validate_endpoint("api.example.com:443").unwrap();
+    assert_eq!(got, "api.example.com:443");
+}
+
+#[pg_test(error = "Connection error: endpoint must not contain scheme (found '://'): http://localhost:50051")]
+fn test_grpc_call_rejects_http_prefixed_endpoint() {
+    crate::grpc_call(
+        "http://localhost:50051",
+        "pkg.Service/Method",
+        pgrx::JsonB(serde_json::json!({})),
+        None,
+        None,
+        None,
+    );
+}
+
+#[pg_test(error = "Connection error: endpoint must not be empty")]
+fn test_grpc_call_rejects_empty_endpoint() {
+    crate::grpc_call(
+        "",
+        "pkg.Service/Method",
+        pgrx::JsonB(serde_json::json!({})),
+        None,
+        None,
+        None,
+    );
+}

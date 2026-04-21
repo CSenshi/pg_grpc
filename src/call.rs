@@ -7,6 +7,7 @@ use serde::de::DeserializeSeed as _;
 use tonic::metadata::{AsciiMetadataKey, AsciiMetadataValue};
 use tonic::transport::Channel;
 
+use crate::endpoint::validate_endpoint;
 use crate::error::{GrpcError, GrpcResult};
 use crate::proto;
 
@@ -92,6 +93,7 @@ pub(crate) fn parse_method(method: &str) -> GrpcResult<(String, String)> {
 
 // TODO: cache channels by endpoint to avoid a full TCP+HTTP/2 handshake on every SQL call.
 async fn connect(endpoint: &str) -> GrpcResult<Channel> {
+    let endpoint = validate_endpoint(endpoint)?;
     Channel::from_shared(format!("http://{endpoint}"))
         .map_err(|e| GrpcError::Connection(e.to_string()))?
         .connect()
