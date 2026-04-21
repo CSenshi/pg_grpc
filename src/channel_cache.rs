@@ -22,11 +22,7 @@ pub async fn get_or_connect(endpoint: &str) -> GrpcResult<Channel> {
         .connect()
         .await
         .map_err(|e| GrpcError::Connection(format!("{key}: {e}")))?;
-    Ok(CHANNELS
-        .write()
-        .entry(key)
-        .or_insert(channel)
-        .clone())
+    Ok(CHANNELS.write().entry(key).or_insert(channel).clone())
 }
 
 #[cfg(any(test, feature = "pg_test"))]

@@ -7,7 +7,7 @@ use serde::de::DeserializeSeed as _;
 use tonic::metadata::{AsciiMetadataKey, AsciiMetadataValue};
 use tonic::transport::Channel;
 
-use crate::endpoint::validate_endpoint;
+use crate::channel_cache;
 use crate::error::{GrpcError, GrpcResult};
 use crate::proto;
 
@@ -45,7 +45,7 @@ async fn call_async(
     metadata: Option<serde_json::Value>,
 ) -> GrpcResult<serde_json::Value> {
     let (service_name, method_name) = parse_method(method)?;
-    let channel = connect(endpoint).await?;
+    let channel = channel_cache::get_or_connect(endpoint).await?;
     let pool = match crate::proto_registry::get_proto(&service_name) {
         Some(pool) => pool,
         None if use_reflection => {
@@ -89,16 +89,6 @@ pub(crate) fn parse_method(method: &str) -> GrpcResult<(String, String)> {
         return Err(invalid());
     }
     Ok((service.to_string(), method_name.to_string()))
-}
-
-// TODO: cache channels by endpoint to avoid a full TCP+HTTP/2 handshake on every SQL call.
-async fn connect(endpoint: &str) -> GrpcResult<Channel> {
-    let endpoint = validate_endpoint(endpoint)?;
-    Channel::from_shared(format!("http://{endpoint}"))
-        .map_err(|e| GrpcError::Connection(e.to_string()))?
-        .connect()
-        .await
-        .map_err(|e| GrpcError::Connection(format!("{endpoint}: {e}")))
 }
 
 fn resolve_method(
