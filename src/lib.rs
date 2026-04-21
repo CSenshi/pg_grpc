@@ -9,6 +9,7 @@ mod error;
 mod proto;
 mod proto_registry;
 mod proto_staging;
+mod tls;
 
 use crate::error::{GrpcError, GrpcResult};
 

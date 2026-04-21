@@ -17,4 +17,5 @@ mod tests {
     include!("list.rs");
     include!("registry.rs");
     include!("staging.rs");
+    include!("tls.rs");
 }
