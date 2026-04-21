@@ -72,3 +72,49 @@ fn test_tls_config_empty_ne_with_ca_cert() {
         crate::tls::TlsConfig::parse(&serde_json::json!({ "ca_cert": "PEM" })).unwrap();
     assert_ne!(empty, with_ca);
 }
+
+// Cache-key distinctness at the (endpoint, Option<TlsConfig>) level. Exercises
+// the Hash/Eq contract directly rather than forcing real TLS handshakes —
+// different TLS configs must be different keys regardless of endpoint.
+#[pg_test]
+fn test_cache_key_same_endpoint_same_tls_eq() {
+    let endpoint = "host:9000".to_string();
+    let tls = crate::tls::TlsConfig::parse(&serde_json::json!({ "ca_cert": "PEM" })).unwrap();
+    let k1 = (endpoint.clone(), Some(tls.clone()));
+    let k2 = (endpoint, Some(tls));
+    assert_eq!(k1, k2);
+}
+
+#[pg_test]
+fn test_cache_key_same_endpoint_different_tls_ne() {
+    let endpoint = "host:9000".to_string();
+    let a = crate::tls::TlsConfig::parse(&serde_json::json!({})).unwrap();
+    let b = crate::tls::TlsConfig::parse(&serde_json::json!({ "ca_cert": "PEM" })).unwrap();
+    let k_plain = (endpoint.clone(), None::<crate::tls::TlsConfig>);
+    let k_tls_empty = (endpoint.clone(), Some(a));
+    let k_tls_ca = (endpoint, Some(b));
+    assert_ne!(k_plain, k_tls_empty);
+    assert_ne!(k_tls_empty, k_tls_ca);
+    assert_ne!(k_plain, k_tls_ca);
+}
+
+// End-to-end: real TLS handshake + reflection + unary call against grpcb.in:9001
+// using the system trust store. Matches how the existing plaintext tests hit
+// grpcb.in:9000 — relies on outbound network, same as the rest of the suite.
+#[pg_test]
+fn test_grpc_call_tls_reflection_e2e() {
+    crate::grpc_proto_unregister_all();
+    crate::channel_cache::clear();
+    let result = crate::grpc_call(
+        &grpcbin_tls_endpoint(),
+        "grpcbin.GRPCBin/DummyUnary",
+        pgrx::JsonB(serde_json::json!({"f_string": "tls-hello"})),
+        None,
+        None,
+        None,
+        Some(pgrx::JsonB(serde_json::json!({}))),
+    );
+    assert_eq!(result.0["f_string"], "tls-hello");
+    crate::grpc_proto_unregister_all();
+    crate::channel_cache::clear();
+}

@@ -10,6 +10,13 @@ mod tests {
         std::env::var("GRPCBIN_ENDPOINT").unwrap_or_else(|_| "grpcb.in:9000".to_string())
     }
 
+    // TLS sibling of grpcbin_endpoint. grpcb.in exposes :9001 as the TLS port.
+    // Allow override for CI where the containerized grpcbin may terminate TLS
+    // on a different host/port.
+    fn grpcbin_tls_endpoint() -> String {
+        std::env::var("GRPCBIN_TLS_ENDPOINT").unwrap_or_else(|_| "grpcb.in:9001".to_string())
+    }
+
     include!("call.rs");
     include!("channel_cache.rs");
     include!("compile.rs");
