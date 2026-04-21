@@ -8,9 +8,7 @@ use crate::error::{GrpcError, GrpcResult};
 use crate::tls::TlsConfig;
 
 // Cache key is (endpoint, Option<TlsConfig>) so two calls with the same host
-// but different TLS settings (e.g. plaintext vs TLS, or different ca_cert)
-// resolve to distinct Channels. tonic::transport::Channel is Arc-backed, so
-// clones share one underlying connection pool and its auto-reconnect logic.
+// but different TLS settings resolve to distinct Channels.
 type Key = (String, Option<TlsConfig>);
 
 static CHANNELS: LazyLock<RwLock<HashMap<Key, Channel>>> =

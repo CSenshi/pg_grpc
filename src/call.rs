@@ -29,7 +29,14 @@ pub fn make_grpc_call(
     rt.block_on(async {
         match tokio::time::timeout(
             std::time::Duration::from_millis(timeout_ms),
-            call_async(endpoint, method, request_json, use_reflection, metadata, tls),
+            call_async(
+                endpoint,
+                method,
+                request_json,
+                use_reflection,
+                metadata,
+                tls,
+            ),
         )
         .await
         {

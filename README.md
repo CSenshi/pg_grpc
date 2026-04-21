@@ -57,6 +57,30 @@ SELECT grpc_call(
 );
 ```
 
+### 3. TLS (optional)
+
+Pass a non-null `tls` JSONB to negotiate TLS. The OS trust store is used by default, so the public example below needs no extra configuration:
+
+```sql
+SELECT grpc_call(
+    'grpcb.in:9001',
+    'grpcbin.GRPCBin/DummyUnary',
+    '{"f_string": "hello"}'::jsonb,
+    tls => '{}'::jsonb
+);
+```
+
+For private CAs, layer in a PEM via `ca_cert`:
+
+```sql
+SELECT grpc_call(
+    'internal.example.com:443',
+    'pkg.Service/Method',
+    '{"foo": "bar"}'::jsonb,
+    tls => jsonb_build_object('ca_cert', pg_read_file('/etc/ssl/certs/internal-root.pem'))
+);
+```
+
 ## Proto management API
 
 | Function                              | Description                                |
@@ -85,9 +109,8 @@ All errors raise a PostgreSQL `ERROR` and abort the current statement:
 
 ## Limitations
 
-- **HTTP only** — TLS/mTLS not supported
+- **Server-auth TLS only** — mTLS (`client_cert`, `client_key`) and SNI override (`domain_name`) are not wired yet
 - **Unary only** — streaming methods not supported
-- **No caching** — a new connection and (for the reflection path) a new reflection request are made on every call
-- **Endpoint format** — `host:port`, never include a scheme
+- **Endpoint format** — `host:port`, never include a scheme (the scheme is chosen by the `tls` parameter)
 - **Reflection** — required unless you use `grpc_proto_stage` + `grpc_proto_compile`
-- **Per-connection state** — the staged/registered protos live inside a single Postgres backend; new connections start empty
+- **Per-connection state** — channel cache, staged, and registered protos all live inside a single Postgres backend; new connections start empty

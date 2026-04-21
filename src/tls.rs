@@ -5,9 +5,6 @@ use crate::error::{GrpcError, GrpcResult};
 
 const ACCEPTED_FIELDS: &[&str] = &["ca_cert"];
 
-// Parsed server-auth TLS options. Hash+Eq so two calls with the same TLS
-// configuration share a cached Channel via the (endpoint, Option<TlsConfig>)
-// key, while differing configs resolve to distinct entries.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TlsConfig {
     pub ca_cert: Option<Vec<u8>>,
@@ -52,13 +49,10 @@ impl TlsConfig {
         Ok(Self { ca_cert })
     }
 
-    // with_native_roots seeds the OS trust store; ca_certificate layers in a
-    // private-CA PEM on top, which is what private deployments need when the
-    // server cert is not chained to a publicly-trusted root.
     pub fn build_client_tls_config(&self) -> ClientTlsConfig {
         let mut cfg = ClientTlsConfig::new().with_native_roots();
-        if let Some(pem) = &self.ca_cert {
-            cfg = cfg.ca_certificate(Certificate::from_pem(pem.clone()));
+        if let Some(ca_cert) = &self.ca_cert {
+            cfg = cfg.ca_certificate(Certificate::from_pem(ca_cert.clone()));
         }
         cfg
     }
