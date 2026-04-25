@@ -81,6 +81,24 @@ SELECT grpc_call(
 );
 ```
 
+For mTLS, supply both `client_cert` and `client_key` PEMs (set together or not at
+all — one without the other is a parse error). `domain_name` overrides the SNI /
+certificate-verification name, useful for IP endpoints or mismatched cert CN/SAN:
+
+```sql
+SELECT grpc_call(
+    '10.0.0.7:8443',
+    'pkg.Service/Method',
+    '{"foo": "bar"}'::jsonb,
+    tls => jsonb_build_object(
+        'ca_cert',     pg_read_file('/etc/ssl/certs/internal-root.pem'),
+        'client_cert', pg_read_file('/etc/ssl/certs/client.pem'),
+        'client_key',  pg_read_file('/etc/ssl/private/client.key'),
+        'domain_name', 'internal.example.com'
+    )
+);
+```
+
 ## Proto management API
 
 | Function                              | Description                                |
@@ -109,7 +127,6 @@ All errors raise a PostgreSQL `ERROR` and abort the current statement:
 
 ## Limitations
 
-- **Server-auth TLS only** — mTLS (`client_cert`, `client_key`) and SNI override (`domain_name`) are not wired yet
 - **Unary only** — streaming methods not supported
 - **Endpoint format** — `host:port`, never include a scheme (the scheme is chosen by the `tls` parameter)
 - **Reflection** — required unless you use `grpc_proto_stage` + `grpc_proto_compile`
