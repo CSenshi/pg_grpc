@@ -42,6 +42,8 @@ fn grpc_call(
         metadata.map(|j| j.0),
         opts.timeout_ms.unwrap_or(30_000),
         opts.tls,
+        opts.max_decode_message_size_bytes,
+        opts.max_encode_message_size_bytes,
     ) {
         Ok(value) => pgrx::JsonB(value),
         Err(e) => pgrx::error!("{}", e),
