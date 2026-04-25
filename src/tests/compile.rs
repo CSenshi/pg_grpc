@@ -81,3 +81,35 @@ fn test_compile_google_wkt_import() {
         "service test_wkt.Event should be in the compiled pool"
     );
 }
+
+// Regression for #31: encoding a JSON Any payload whose @type points at a WKT
+// (StringValue, lives in google/protobuf/wrappers.proto) must succeed even
+// though the user proto only imports google/protobuf/any.proto. Without the
+// WKT auto-seed in compile_proto_files, MessageDescriptor::deserialize errors
+// with "message 'google.protobuf.StringValue' not found".
+#[pg_test]
+fn wkt_any_payload_encodes() {
+    use prost_reflect::DynamicMessage;
+    use serde::de::DeserializeSeed as _;
+
+    let files = one_file(
+        "any_test.proto",
+        r#"
+        syntax = "proto3";
+        import "google/protobuf/any.proto";
+        package wkt_any_test;
+        service S { rpc M(Msg) returns (Msg); }
+        message Msg { google.protobuf.Any payload = 1; }
+        "#,
+    );
+    let pool = crate::proto::compile_proto_files(files).expect("compile must succeed");
+
+    let desc = pool
+        .get_message_by_name("wkt_any_test.Msg")
+        .expect("wkt_any_test.Msg should be in pool");
+    let json = r#"{"payload":{"@type":"type.googleapis.com/google.protobuf.StringValue","value":"hi"}}"#;
+    let mut de = serde_json::Deserializer::from_str(json);
+    let _msg: DynamicMessage = desc
+        .deserialize(&mut de)
+        .expect("Any payload referencing WKT should deserialize against compiled pool");
+}

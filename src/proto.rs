@@ -130,7 +130,27 @@ pub fn compile_proto_files(files: HashMap<String, String>) -> GrpcResult<Descrip
         ));
     }
 
+    backfill_wkts(&mut pool)?;
     Ok(pool)
+}
+
+// Seed the pool with every Google Well-Known Type that prost_reflect ships
+// (Any, Duration, Timestamp, wrappers, Struct, ...). Without this, a JSON
+// `Any` payload whose `@type` URL references a WKT (e.g. StringValue) cannot
+// be resolved at encode time unless the user happened to import the
+// containing proto. User-supplied or server-returned files added before this
+// call always win — same-name files are skipped, never overridden.
+pub fn backfill_wkts(pool: &mut DescriptorPool) -> GrpcResult<()> {
+    let global = DescriptorPool::global();
+    for file in global.files() {
+        let name = file.name().to_owned();
+        if pool.get_file_by_name(&name).is_some() {
+            continue;
+        }
+        pool.add_file_descriptor_proto(file.file_descriptor_proto().clone())
+            .map_err(|e| GrpcError::ProtoCompile(format!("seed WKT {name}: {e}")))?;
+    }
+    Ok(())
 }
 
 struct InMemoryResolver {
