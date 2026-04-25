@@ -72,8 +72,6 @@ fn test_grpc_call_rejects_http_prefixed_endpoint() {
         pgrx::JsonB(serde_json::json!({})),
         None,
         None,
-        None,
-        None,
     );
 }
 
@@ -83,8 +81,6 @@ fn test_grpc_call_rejects_empty_endpoint() {
         "",
         "pkg.Service/Method",
         pgrx::JsonB(serde_json::json!({})),
-        None,
-        None,
         None,
         None,
     );

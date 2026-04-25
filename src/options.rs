@@ -26,7 +26,7 @@ impl OptionsConfig {
             Value::Null => return Ok(Self::default()),
             Value::Object(m) => m,
             _ => {
-                return Err(GrpcError::Call(format!(
+                return Err(GrpcError::Connection(format!(
                     "options must be a JSON object (accepted keys: {})",
                     ACCEPTED_KEYS.join(", ")
                 )));
@@ -35,7 +35,7 @@ impl OptionsConfig {
 
         for key in obj.keys() {
             if !ACCEPTED_KEYS.contains(&key.as_str()) {
-                return Err(GrpcError::Call(format!(
+                return Err(GrpcError::Connection(format!(
                     "options: unknown key '{key}' (accepted keys: {})",
                     ACCEPTED_KEYS.join(", ")
                 )));
@@ -54,7 +54,7 @@ impl OptionsConfig {
                 Value::Null => None,
                 Value::Object(_) => Some(TlsConfig::parse(v)?),
                 _ => {
-                    return Err(GrpcError::Call(
+                    return Err(GrpcError::Connection(
                         "options.tls must be an object".to_string(),
                     ));
                 }
@@ -77,15 +77,15 @@ impl OptionsConfig {
 fn parse_size_u32(key: &str, value: &Value) -> GrpcResult<u32> {
     let n = value
         .as_i64()
-        .ok_or_else(|| GrpcError::Call(format!("options.{key} must be an integer")))?;
+        .ok_or_else(|| GrpcError::Connection(format!("options.{key} must be an integer")))?;
     if n < 1 {
-        return Err(GrpcError::Call(format!(
+        return Err(GrpcError::Connection(format!(
             "options.{key} must be in [1, {}] (got {n})",
             u32::MAX
         )));
     }
     if n > u32::MAX as i64 {
-        return Err(GrpcError::Call(format!(
+        return Err(GrpcError::Connection(format!(
             "options.{key} must be in [1, {}] (got {n})",
             u32::MAX
         )));
@@ -96,15 +96,15 @@ fn parse_size_u32(key: &str, value: &Value) -> GrpcResult<u32> {
 fn parse_bool(key: &str, value: &Value) -> GrpcResult<bool> {
     value
         .as_bool()
-        .ok_or_else(|| GrpcError::Call(format!("options.{key} must be a boolean")))
+        .ok_or_else(|| GrpcError::Connection(format!("options.{key} must be a boolean")))
 }
 
 fn parse_positive_u64(key: &str, value: &Value) -> GrpcResult<u64> {
     let n = value
         .as_i64()
-        .ok_or_else(|| GrpcError::Call(format!("options.{key} must be an integer")))?;
+        .ok_or_else(|| GrpcError::Connection(format!("options.{key} must be an integer")))?;
     if n < 1 {
-        return Err(GrpcError::Call(format!(
+        return Err(GrpcError::Connection(format!(
             "options.{key} must be >= 1 (got {n})"
         )));
     }

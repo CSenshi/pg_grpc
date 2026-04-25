@@ -229,9 +229,7 @@ fn test_grpc_call_tls_reflection_e2e() {
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "tls-hello"})),
         None,
-        None,
-        None,
-        Some(pgrx::JsonB(serde_json::json!({}))),
+        Some(pgrx::JsonB(serde_json::json!({"tls": {}}))),
     );
     assert_eq!(result.0["f_string"], "tls-hello");
     crate::grpc_proto_unregister_all();
