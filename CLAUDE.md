@@ -234,6 +234,8 @@ grpc_proto_compile()
 
 The `InMemoryResolver` in `proto.rs` implements `protox::file::FileResolver` — it serves staged files by filename. It's chained with `GoogleFileResolver` so imports like `google/protobuf/timestamp.proto` resolve against protox's bundled WKT copies. No filesystem, no network.
 
+After compile, `backfill_wkts` seeds every pool with `prost_reflect::DescriptorPool::global()`'s bundled WKTs. This lets `Any` payloads referencing a WKT (`google.protobuf.StringValue`, `Timestamp`, `Duration`, …) resolve at encode time even when the user proto only imports `any.proto`. User-staged files keep priority: same-name files added before the backfill are not overridden.
+
 ### 2. Reflection (fallback when nothing is registered)
 
 `proto::fetch_pool(channel, service_name)` calls the server's `grpc.reflection.v1alpha.ServerReflection` service with a `FileContainingSymbol` request, decodes the streamed `FileDescriptorProto`s, and builds a `DescriptorPool`. The first call for a given service populates `PROTO_REGISTRY` with `Origin::Reflection { endpoint }`; subsequent calls hit the cache. Reflection caching is per-backend-process — reconnect (or `grpc_proto_unregister`) to force a refresh.

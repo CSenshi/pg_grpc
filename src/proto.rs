@@ -16,14 +16,17 @@ pub async fn fetch_pool(
 ) -> GrpcResult<DescriptorPool> {
     // Prefer the stable v1 service (grpc.reflection.v1.ServerReflection).
     // Fall back to v1alpha if the server hasn't implemented v1 yet.
-    match fetch_v1(channel.clone(), service_name, max_decode, max_encode).await {
+    let mut pool = match fetch_v1(channel.clone(), service_name, max_decode, max_encode).await {
         Ok(pool) => Ok(pool),
         Err(s) if s.code() == tonic::Code::Unimplemented => {
             fetch_v1alpha(channel, service_name, max_decode, max_encode).await
         }
         Err(s) => Err(s),
     }
-    .map_err(|s| GrpcError::Proto(format!("reflection: {}", s.message())))
+    .map_err(|s| GrpcError::Proto(format!("reflection: {}", s.message())))?;
+
+    backfill_wkts(&mut pool)?;
+    Ok(pool)
 }
 
 macro_rules! define_fetch {
@@ -130,7 +133,21 @@ pub fn compile_proto_files(files: HashMap<String, String>) -> GrpcResult<Descrip
         ));
     }
 
+    backfill_wkts(&mut pool)?;
     Ok(pool)
+}
+
+pub fn backfill_wkts(pool: &mut DescriptorPool) -> GrpcResult<()> {
+    let global = DescriptorPool::global();
+    for file in global.files() {
+        let name = file.name().to_owned();
+        if pool.get_file_by_name(&name).is_some() {
+            continue;
+        }
+        pool.add_file_descriptor_proto(file.file_descriptor_proto().clone())
+            .map_err(|e| GrpcError::ProtoCompile(format!("seed WKT {name}: {e}")))?;
+    }
+    Ok(())
 }
 
 struct InMemoryResolver {
