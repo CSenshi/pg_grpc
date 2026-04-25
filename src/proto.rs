@@ -16,14 +16,17 @@ pub async fn fetch_pool(
 ) -> GrpcResult<DescriptorPool> {
     // Prefer the stable v1 service (grpc.reflection.v1.ServerReflection).
     // Fall back to v1alpha if the server hasn't implemented v1 yet.
-    match fetch_v1(channel.clone(), service_name, max_decode, max_encode).await {
+    let mut pool = match fetch_v1(channel.clone(), service_name, max_decode, max_encode).await {
         Ok(pool) => Ok(pool),
         Err(s) if s.code() == tonic::Code::Unimplemented => {
             fetch_v1alpha(channel, service_name, max_decode, max_encode).await
         }
         Err(s) => Err(s),
     }
-    .map_err(|s| GrpcError::Proto(format!("reflection: {}", s.message())))
+    .map_err(|s| GrpcError::Proto(format!("reflection: {}", s.message())))?;
+
+    backfill_wkts(&mut pool)?;
+    Ok(pool)
 }
 
 macro_rules! define_fetch {
@@ -134,19 +137,10 @@ pub fn compile_proto_files(files: HashMap<String, String>) -> GrpcResult<Descrip
     Ok(pool)
 }
 
-// Seed the pool with every Google Well-Known Type that prost_reflect ships
-// (Any, Duration, Timestamp, wrappers, Struct, ...). Without this, a JSON
-// `Any` payload whose `@type` URL references a WKT (e.g. StringValue) cannot
-// be resolved at encode time unless the user happened to import the
-// containing proto. User-supplied or server-returned files added before this
-// call always win — same-name files are skipped, never overridden.
 pub fn backfill_wkts(pool: &mut DescriptorPool) -> GrpcResult<()> {
     let global = DescriptorPool::global();
     for file in global.files() {
         let name = file.name().to_owned();
-        // prost_reflect's add_file_descriptor_proto dedupes by filename
-        // already; the explicit guard here makes the user-staged-wins
-        // policy visible to readers and avoids relying on that dedup.
         if pool.get_file_by_name(&name).is_some() {
             continue;
         }
