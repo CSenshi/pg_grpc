@@ -24,8 +24,28 @@ impl OptionsConfig {
         if let Some(v) = obj.get("timeout_ms") {
             cfg.timeout_ms = Some(parse_positive_u64("timeout_ms", v)?);
         }
+        if let Some(v) = obj.get("use_reflection") {
+            cfg.use_reflection = Some(parse_bool("use_reflection", v)?);
+        }
+        if let Some(v) = obj.get("tls") {
+            cfg.tls = match v {
+                Value::Null => None,
+                Value::Object(_) => Some(TlsConfig::parse(v)?),
+                _ => {
+                    return Err(GrpcError::Call(
+                        "options.tls must be an object".to_string(),
+                    ));
+                }
+            };
+        }
         Ok(cfg)
     }
+}
+
+fn parse_bool(key: &str, value: &Value) -> GrpcResult<bool> {
+    value
+        .as_bool()
+        .ok_or_else(|| GrpcError::Call(format!("options.{key} must be a boolean")))
 }
 
 fn parse_positive_u64(key: &str, value: &Value) -> GrpcResult<u64> {
