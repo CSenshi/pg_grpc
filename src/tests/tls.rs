@@ -150,6 +150,44 @@ fn test_cache_key_same_endpoint_same_tls_eq() {
 }
 
 #[pg_test]
+fn test_cache_key_differs_on_client_cert() {
+    let endpoint = "host:9000".to_string();
+    let a = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "client_cert": "CERT-A", "client_key": "KEY",
+    }))
+    .unwrap();
+    let b = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "client_cert": "CERT-B", "client_key": "KEY",
+    }))
+    .unwrap();
+    assert_ne!((endpoint.clone(), Some(a)), (endpoint, Some(b)));
+}
+
+#[pg_test]
+fn test_cache_key_differs_on_client_key() {
+    let endpoint = "host:9000".to_string();
+    let a = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "client_cert": "CERT", "client_key": "KEY-A",
+    }))
+    .unwrap();
+    let b = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "client_cert": "CERT", "client_key": "KEY-B",
+    }))
+    .unwrap();
+    assert_ne!((endpoint.clone(), Some(a)), (endpoint, Some(b)));
+}
+
+#[pg_test]
+fn test_cache_key_differs_on_domain_name() {
+    let endpoint = "host:9000".to_string();
+    let a = crate::tls::TlsConfig::parse(&serde_json::json!({ "domain_name": "a.example" }))
+        .unwrap();
+    let b = crate::tls::TlsConfig::parse(&serde_json::json!({ "domain_name": "b.example" }))
+        .unwrap();
+    assert_ne!((endpoint.clone(), Some(a)), (endpoint, Some(b)));
+}
+
+#[pg_test]
 fn test_cache_key_same_endpoint_different_tls_ne() {
     let endpoint = "host:9000".to_string();
     let a = crate::tls::TlsConfig::parse(&serde_json::json!({})).unwrap();
