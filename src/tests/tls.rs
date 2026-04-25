@@ -59,7 +59,9 @@ fn test_tls_parse_rejects_unknown_key() {
             .expect_err("unknown key must fail");
     let msg = err.to_string();
     assert!(msg.contains("unknown key"), "unexpected: {msg}");
-    assert!(msg.contains("ca_cert"), "should list accepted fields: {msg}");
+    for field in ["ca_cert", "client_cert", "client_key", "domain_name"] {
+        assert!(msg.contains(field), "error should list {field}: {msg}");
+    }
 }
 
 #[pg_test]
