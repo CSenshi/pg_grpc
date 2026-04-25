@@ -8,8 +8,6 @@ fn test_grpc_call_dummyunary() {
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         None,
         None,
-        None,
-        None,
     );
     assert_eq!(result.0["f_string"], "hello");
 }
@@ -22,8 +20,6 @@ fn test_grpc_call_invalid_method_path() {
         &grpcbin_endpoint(),
         "no-slash-here",
         pgrx::JsonB(serde_json::json!({})),
-        None,
-        None,
         None,
         None,
     );
@@ -40,9 +36,7 @@ fn test_grpc_call_reflection_disabled_misses_registry() {
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         None,
-        None,
-        Some(false),
-        None,
+        Some(pgrx::JsonB(serde_json::json!({"use_reflection": false}))),
     );
 }
 
@@ -66,9 +60,7 @@ fn test_grpc_call_reflection_disabled_hits_registry() {
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "no-reflection"})),
         None,
-        None,
-        Some(false),
-        None,
+        Some(pgrx::JsonB(serde_json::json!({"use_reflection": false}))),
     );
     assert_eq!(result.0["f_string"], "no-reflection");
 
@@ -95,8 +87,6 @@ fn test_grpc_call_method_not_found() {
         pgrx::JsonB(serde_json::json!({"f_string": "x"})),
         None,
         None,
-        None,
-        None,
     );
 }
 
@@ -111,8 +101,6 @@ fn test_grpc_call_with_metadata_smoke() {
             "authorization": "Bearer tok",
             "x-trace-id": "abc"
         }))),
-        None,
-        None,
         None,
     );
     assert_eq!(result.0["f_string"], "hello");
@@ -252,36 +240,85 @@ fn test_grpc_call_timeout_fires() {
         "x.Y/Z",
         pgrx::JsonB(serde_json::json!({})),
         None,
-        Some(200),
-        None,
-        None,
+        Some(pgrx::JsonB(serde_json::json!({"timeout_ms": 200}))),
     );
 }
 
-#[pg_test(error = "timeout_ms must be positive (got 0)")]
+#[pg_test(error = "Connection error: options.timeout_ms must be >= 1 (got 0)")]
 fn test_grpc_call_timeout_zero_rejected() {
     crate::grpc_call(
         &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hi"})),
         None,
-        Some(0),
-        None,
-        None,
+        Some(pgrx::JsonB(serde_json::json!({"timeout_ms": 0}))),
     );
 }
 
-#[pg_test(error = "timeout_ms must be positive (got -5)")]
+#[pg_test(error = "Connection error: options.timeout_ms must be >= 1 (got -5)")]
 fn test_grpc_call_timeout_negative_rejected() {
     crate::grpc_call(
         &grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hi"})),
         None,
-        Some(-5),
-        None,
-        None,
+        Some(pgrx::JsonB(serde_json::json!({"timeout_ms": -5}))),
     );
+}
+
+// Encode-cap wiring: stage a proto so reflection is bypassed, then cap the
+// encode size at 1 byte. The non-empty request body must trigger tonic's
+// encode-size enforcement and surface as a Call error. Server-independent.
+#[pg_test]
+fn test_grpc_call_encode_cap_fires() {
+    crate::grpc_proto_unregister_all();
+    crate::grpc_proto_unstage_all();
+    crate::grpc_proto_stage(
+        "dummy.proto",
+        r#"
+        syntax = "proto3";
+        package grpcbin;
+        service GRPCBin { rpc DummyUnary(DummyMessage) returns (DummyMessage); }
+        message DummyMessage { string f_string = 1; }
+        "#,
+    );
+    crate::grpc_proto_compile();
+
+    let result = std::panic::catch_unwind(|| {
+        crate::grpc_call(
+            &grpcbin_endpoint(),
+            "grpcbin.GRPCBin/DummyUnary",
+            pgrx::JsonB(serde_json::json!({"f_string": "this-will-not-fit"})),
+            None,
+            Some(pgrx::JsonB(serde_json::json!({
+                "use_reflection": false,
+                "max_encode_message_size_bytes": 1
+            }))),
+        )
+    });
+    crate::grpc_proto_unregister_all();
+    assert!(
+        result.is_err(),
+        "expected encode-size cap to abort the call"
+    );
+}
+
+// Decode-cap happy path: setting a generous decode limit must not break a
+// normal small call. Proves the decode knob flows through to tonic without
+// breaking the common path.
+#[pg_test]
+fn test_grpc_call_large_decode_limit_does_not_break_happy_path() {
+    crate::grpc_proto_unregister_all();
+    let result = crate::grpc_call(
+        &grpcbin_endpoint(),
+        "grpcbin.GRPCBin/DummyUnary",
+        pgrx::JsonB(serde_json::json!({"f_string": "decode-knob"})),
+        None,
+        Some(pgrx::JsonB(serde_json::json!({
+            "max_decode_message_size_bytes": 67_108_864
+        }))),
+    );
+    assert_eq!(result.0["f_string"], "decode-knob");
 }
 
 #[pg_test]

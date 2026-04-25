@@ -115,15 +115,38 @@ fn grpc_call(
     method: &str,
     request: pgrx::JsonB,
     metadata: default!(Option<pgrx::JsonB>, "null"),   // gRPC metadata / headers
-    timeout_ms: default!(Option<i64>, "null"),         // defaults to 30_000ms; must be > 0
-    use_reflection: default!(Option<bool>, "true"),
-    tls: default!(Option<pgrx::JsonB>, "null"),        // NULL → plaintext; object → TLS
+    options: default!(Option<pgrx::JsonB>, "null"),    // transport / runtime knobs
 ) -> pgrx::JsonB
 ```
 
 `metadata` is a JSON object whose values are strings or arrays of strings. Keys are silently lowercased. Keys ending in `-bin` (binary metadata) are rejected in v1.
 
-`tls` controls transport security. `NULL` (default) keeps the current plaintext behavior; `'{}'::jsonb` turns on TLS with the OS trust store; `'{"ca_cert": "<PEM>"}'::jsonb` adds a private-CA root on top. Reflection runs over the same channel, so `use_reflection => true` with a non-null `tls` reflects over TLS. Parsing is strict: unknown keys and empty- or whitespace-only string values raise a `Connection error`. The accepted fields are `ca_cert`, `client_cert`, `client_key`, and `domain_name`. For mTLS, `client_cert` and `client_key` must be set together (one without the other is a parse error); when both are present they're attached as a tonic `Identity`. `domain_name` overrides the SNI / certificate-verification name — needed for IP endpoints or when the server cert's CN/SAN doesn't match the dialed host.
+`options` is a strict-parsed JSONB blob holding all per-call transport/runtime config. `NULL` or omitted keys leave defaults in place. Unknown keys raise a `Connection error` listing the accepted set, and per-key type/range errors carry the offending path (e.g. `options.timeout_ms must be an integer`). Accepted keys:
+
+| Key                              | Type    | Validation                | Default behavior when omitted                 |
+| -------------------------------- | ------- | ------------------------- | --------------------------------------------- |
+| `timeout_ms`                     | integer | `>= 1`                    | 30_000 ms                                     |
+| `use_reflection`                 | boolean | —                         | `true`                                        |
+| `tls`                            | object  | delegated to TLS parser   | NULL → plaintext                              |
+| `max_decode_message_size_bytes`  | integer | `[1, 4_294_967_295]`      | tonic default (4 MiB)                         |
+| `max_encode_message_size_bytes`  | integer | `[1, 4_294_967_295]`      | tonic default (unbounded)                     |
+
+Example mixing several keys:
+
+```sql
+SELECT grpc_call('host:port', 'pkg.S/M', '{}'::jsonb,
+  options => '{
+    "timeout_ms": 5000,
+    "use_reflection": true,
+    "tls": {"ca_cert": "<PEM>"},
+    "max_decode_message_size_bytes": 67108864,
+    "max_encode_message_size_bytes": 4194304
+  }'::jsonb);
+```
+
+The size knobs apply to both the unary call and the reflection fetch on the same channel — a generous decode limit lets you both receive a large response and reflect a large schema. The 4_294_967_295 ceiling is the gRPC wire framing limit (4-byte length prefix); larger values can never be a valid single-message size.
+
+`tls` (when supplied) controls transport security. `'{}'::jsonb` turns on TLS with the OS trust store; `'{"ca_cert": "<PEM>"}'::jsonb` adds a private-CA root on top. Reflection runs over the same channel, so `use_reflection => true` with a non-null `tls` reflects over TLS. The accepted inner fields are `ca_cert`, `client_cert`, `client_key`, and `domain_name`. For mTLS, `client_cert` and `client_key` must be set together (one without the other is a parse error); when both are present they're attached as a tonic `Identity`. `domain_name` overrides the SNI / certificate-verification name — needed for IP endpoints or when the server cert's CN/SAN doesn't match the dialed host.
 
 User-supplied proto management (all `#[pg_extern]` in lib.rs):
 
@@ -317,7 +340,8 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 
 ```sql
 -- gRPC call
-grpc_call(endpoint TEXT, method TEXT, request JSONB [, metadata JSONB] [, timeout_ms BIGINT] [, use_reflection BOOLEAN] [, tls JSONB]) RETURNS JSONB
+grpc_call(endpoint TEXT, method TEXT, request JSONB [, metadata JSONB] [, options JSONB]) RETURNS JSONB
+-- options keys: timeout_ms, use_reflection, tls, max_decode_message_size_bytes, max_encode_message_size_bytes
 
 -- Staging
 grpc_proto_stage(filename TEXT, source TEXT) RETURNS VOID

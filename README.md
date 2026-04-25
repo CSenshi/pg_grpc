@@ -57,16 +57,31 @@ SELECT grpc_call(
 );
 ```
 
-### 3. TLS (optional)
+### 3. Per-call options
 
-Pass a non-null `tls` JSONB to negotiate TLS. The OS trust store is used by default, so the public example below needs no extra configuration:
+Per-call settings (timeout, TLS, reflection toggle, message size limits) all go
+inside a single `options` JSONB blob, separate from `metadata` (gRPC headers).
+Omit the blob — or any individual key — to take defaults.
+
+| `options` key                    | Type    | Default                  |
+| -------------------------------- | ------- | ------------------------ |
+| `timeout_ms`                     | integer | 30000                    |
+| `use_reflection`                 | boolean | true                     |
+| `tls`                            | object  | NULL → plaintext         |
+| `max_decode_message_size_bytes`  | integer | 4 MiB (tonic default)    |
+| `max_encode_message_size_bytes`  | integer | unbounded (tonic default)|
+
+### TLS
+
+Set `options.tls` to negotiate TLS. The OS trust store is used by default, so
+the public example below needs no extra configuration:
 
 ```sql
 SELECT grpc_call(
     'grpcb.in:9001',
     'grpcbin.GRPCBin/DummyUnary',
     '{"f_string": "hello"}'::jsonb,
-    tls => '{}'::jsonb
+    options => '{"tls": {}}'::jsonb
 );
 ```
 
@@ -77,7 +92,9 @@ SELECT grpc_call(
     'internal.example.com:443',
     'pkg.Service/Method',
     '{"foo": "bar"}'::jsonb,
-    tls => jsonb_build_object('ca_cert', pg_read_file('/etc/ssl/certs/internal-root.pem'))
+    options => jsonb_build_object(
+        'tls', jsonb_build_object('ca_cert', pg_read_file('/etc/ssl/certs/internal-root.pem'))
+    )
 );
 ```
 
@@ -90,12 +107,27 @@ SELECT grpc_call(
     '10.0.0.7:8443',
     'pkg.Service/Method',
     '{"foo": "bar"}'::jsonb,
-    tls => jsonb_build_object(
+    options => jsonb_build_object('tls', jsonb_build_object(
         'ca_cert',     pg_read_file('/etc/ssl/certs/internal-root.pem'),
         'client_cert', pg_read_file('/etc/ssl/certs/client.pem'),
         'client_key',  pg_read_file('/etc/ssl/private/client.key'),
         'domain_name', 'internal.example.com'
-    )
+    ))
+);
+```
+
+### Large messages
+
+Raise tonic's 4 MiB decode cap (and/or set an encode guardrail) per call. Limits
+are in raw bytes and apply to both the unary call and the reflection fetch on
+the same channel:
+
+```sql
+SELECT grpc_call(
+    'host:port',
+    'pkg.Service/GetLargeThing',
+    '{}'::jsonb,
+    options => '{"max_decode_message_size_bytes": 67108864}'::jsonb
 );
 ```
 
@@ -123,7 +155,7 @@ All errors raise a PostgreSQL `ERROR` and abort the current statement:
 | `Proto error: …`         | Reflection failed, symbol not found, or JSON ↔ protobuf encode/decode error |
 | `Proto compile error: …` | `grpc_proto_compile` failed to parse/resolve the staged files               |
 | `gRPC call failed: …`    | Server returned a non-OK gRPC status                                        |
-| `Request timeout: …ms`   | The call (connect + reflection + unary) did not finish within `timeout_ms`  |
+| `Request timeout: …ms`   | The call (connect + reflection + unary) did not finish within `options.timeout_ms` |
 
 ## Limitations
 

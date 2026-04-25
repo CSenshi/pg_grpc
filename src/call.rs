@@ -12,6 +12,7 @@ use crate::error::{GrpcError, GrpcResult};
 use crate::proto;
 use crate::tls::TlsConfig;
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_grpc_call(
     endpoint: &str,
     method: &str,
@@ -20,6 +21,8 @@ pub fn make_grpc_call(
     metadata: Option<serde_json::Value>,
     timeout_ms: u64,
     tls: Option<TlsConfig>,
+    max_decode_message_size_bytes: Option<u32>,
+    max_encode_message_size_bytes: Option<u32>,
 ) -> GrpcResult<serde_json::Value> {
     // pgrx backends are single-threaded; a multi-thread runtime would unsafely cross the Postgres boundary.
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -36,6 +39,8 @@ pub fn make_grpc_call(
                 use_reflection,
                 metadata,
                 tls,
+                max_decode_message_size_bytes,
+                max_encode_message_size_bytes,
             ),
         )
         .await
@@ -46,6 +51,7 @@ pub fn make_grpc_call(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn call_async(
     endpoint: &str,
     method: &str,
@@ -53,13 +59,16 @@ async fn call_async(
     use_reflection: bool,
     metadata: Option<serde_json::Value>,
     tls: Option<TlsConfig>,
+    max_decode: Option<u32>,
+    max_encode: Option<u32>,
 ) -> GrpcResult<serde_json::Value> {
     let (service_name, method_name) = parse_method(method)?;
     let channel = channel_cache::get_or_connect(endpoint, tls.as_ref()).await?;
     let pool = match crate::proto_registry::get_proto(&service_name) {
         Some(pool) => pool,
         None if use_reflection => {
-            let pool = proto::fetch_pool(channel.clone(), &service_name).await?;
+            let pool =
+                proto::fetch_pool(channel.clone(), &service_name, max_decode, max_encode).await?;
             crate::proto_registry::insert_proto_reflection(
                 &service_name,
                 pool.clone(),
@@ -81,6 +90,8 @@ async fn call_async(
         &method_name,
         request_bytes,
         metadata,
+        max_decode,
+        max_encode,
     )
     .await?;
     decode_response(method_desc.output(), response_bytes)
@@ -132,12 +143,20 @@ async fn unary_call(
     method_name: &str,
     body: Bytes,
     metadata: Option<serde_json::Value>,
+    max_decode: Option<u32>,
+    max_encode: Option<u32>,
 ) -> GrpcResult<Bytes> {
     let path = format!("/{service_name}/{method_name}")
         .parse::<http::uri::PathAndQuery>()
         .map_err(|e| GrpcError::Proto(e.to_string()))?;
 
     let mut grpc = tonic::client::Grpc::new(channel);
+    if let Some(n) = max_decode {
+        grpc = grpc.max_decoding_message_size(n as usize);
+    }
+    if let Some(n) = max_encode {
+        grpc = grpc.max_encoding_message_size(n as usize);
+    }
     grpc.ready()
         .await
         .map_err(|e| GrpcError::Connection(e.to_string()))?;

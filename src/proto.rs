@@ -8,13 +8,18 @@ use tonic::transport::Channel;
 
 use crate::error::{GrpcError, GrpcResult};
 
-pub async fn fetch_pool(channel: Channel, service_name: &str) -> GrpcResult<DescriptorPool> {
+pub async fn fetch_pool(
+    channel: Channel,
+    service_name: &str,
+    max_decode: Option<u32>,
+    max_encode: Option<u32>,
+) -> GrpcResult<DescriptorPool> {
     // Prefer the stable v1 service (grpc.reflection.v1.ServerReflection).
     // Fall back to v1alpha if the server hasn't implemented v1 yet.
-    match fetch_v1(channel.clone(), service_name).await {
+    match fetch_v1(channel.clone(), service_name, max_decode, max_encode).await {
         Ok(pool) => Ok(pool),
         Err(s) if s.code() == tonic::Code::Unimplemented => {
-            fetch_v1alpha(channel, service_name).await
+            fetch_v1alpha(channel, service_name, max_decode, max_encode).await
         }
         Err(s) => Err(s),
     }
@@ -26,6 +31,8 @@ macro_rules! define_fetch {
         async fn $name(
             channel: Channel,
             service_name: &str,
+            max_decode: Option<u32>,
+            max_encode: Option<u32>,
         ) -> Result<DescriptorPool, tonic::Status> {
             use $pb::{
                 server_reflection_client::ServerReflectionClient,
@@ -34,6 +41,12 @@ macro_rules! define_fetch {
             };
 
             let mut client = ServerReflectionClient::new(channel);
+            if let Some(n) = max_decode {
+                client = client.max_decoding_message_size(n as usize);
+            }
+            if let Some(n) = max_encode {
+                client = client.max_encoding_message_size(n as usize);
+            }
             let request = ServerReflectionRequest {
                 host: String::new(),
                 message_request: Some(MessageRequest::FileContainingSymbol(
