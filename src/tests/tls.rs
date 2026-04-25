@@ -13,9 +13,27 @@ fn test_tls_parse_with_ca_cert() {
 }
 
 #[pg_test]
+fn test_tls_parse_full_config_populates_all_fields() {
+    let ca_pem = "-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----\n";
+    let cert_pem = "-----BEGIN CERTIFICATE-----\nCLIENT\n-----END CERTIFICATE-----\n";
+    let key_pem = "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n";
+    let cfg = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "ca_cert": ca_pem,
+        "client_cert": cert_pem,
+        "client_key": key_pem,
+        "domain_name": "internal.example.com",
+    }))
+    .unwrap();
+    assert_eq!(cfg.ca_cert.as_deref(), Some(ca_pem.as_bytes()));
+    assert_eq!(cfg.client_cert.as_deref(), Some(cert_pem.as_bytes()));
+    assert_eq!(cfg.client_key.as_deref(), Some(key_pem.as_bytes()));
+    assert_eq!(cfg.domain_name.as_deref(), Some("internal.example.com"));
+}
+
+#[pg_test]
 fn test_tls_parse_rejects_unknown_key() {
     let err =
-        crate::tls::TlsConfig::parse(&serde_json::json!({ "client_cert": "x" }))
+        crate::tls::TlsConfig::parse(&serde_json::json!({ "not_a_field": "x" }))
             .expect_err("unknown key must fail");
     let msg = err.to_string();
     assert!(msg.contains("unknown key"), "unexpected: {msg}");

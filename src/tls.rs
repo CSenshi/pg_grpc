@@ -3,11 +3,14 @@ use tonic::transport::{Certificate, ClientTlsConfig};
 
 use crate::error::{GrpcError, GrpcResult};
 
-const ACCEPTED_FIELDS: &[&str] = &["ca_cert"];
+const ACCEPTED_FIELDS: &[&str] = &["ca_cert", "client_cert", "client_key", "domain_name"];
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TlsConfig {
     pub ca_cert: Option<Vec<u8>>,
+    pub client_cert: Option<Vec<u8>>,
+    pub client_key: Option<Vec<u8>>,
+    pub domain_name: Option<String>,
 }
 
 impl TlsConfig {
@@ -31,22 +34,17 @@ impl TlsConfig {
             }
         }
 
-        let ca_cert = match obj.get("ca_cert") {
-            None | Some(Value::Null) => None,
-            Some(Value::String(s)) if s.is_empty() => {
-                return Err(GrpcError::Connection(
-                    "tls: ca_cert must not be empty".into(),
-                ));
-            }
-            Some(Value::String(s)) => Some(s.as_bytes().to_vec()),
-            Some(_) => {
-                return Err(GrpcError::Connection(
-                    "tls: ca_cert must be a PEM string".into(),
-                ));
-            }
-        };
+        let ca_cert = parse_pem_field(obj, "ca_cert")?;
+        let client_cert = parse_pem_field(obj, "client_cert")?;
+        let client_key = parse_pem_field(obj, "client_key")?;
+        let domain_name = parse_string_field(obj, "domain_name")?;
 
-        Ok(Self { ca_cert })
+        Ok(Self {
+            ca_cert,
+            client_cert,
+            client_key,
+            domain_name,
+        })
     }
 
     pub fn build_client_tls_config(&self) -> ClientTlsConfig {
@@ -55,5 +53,28 @@ impl TlsConfig {
             cfg = cfg.ca_certificate(Certificate::from_pem(ca_cert.clone()));
         }
         cfg
+    }
+}
+
+fn parse_pem_field(
+    obj: &serde_json::Map<String, Value>,
+    field: &str,
+) -> GrpcResult<Option<Vec<u8>>> {
+    Ok(parse_string_field(obj, field)?.map(String::into_bytes))
+}
+
+fn parse_string_field(
+    obj: &serde_json::Map<String, Value>,
+    field: &str,
+) -> GrpcResult<Option<String>> {
+    match obj.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) if s.trim().is_empty() => Err(GrpcError::Connection(format!(
+            "tls: {field} must not be empty"
+        ))),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(GrpcError::Connection(format!(
+            "tls: {field} must be a string"
+        ))),
     }
 }
