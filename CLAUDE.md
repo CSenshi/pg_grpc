@@ -24,14 +24,14 @@ SELECT grpc_call('localhost:50051', 'pkg.Service/Method', '{"foo": "bar"}'::json
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `cargo pgrx run pg18` | Build and start Postgres with extension loaded |
-| `cargo pgrx test pg18` | Run all pgrx tests (inside real Postgres) |
-| `cargo pgrx test pg18 -- test_name` | Run a single test |
-| `cargo pgrx install --release` | Install to system Postgres |
-| `cargo clippy` | Lint |
-| `cargo fmt` | Format |
+| Command                             | Description                                    |
+| ----------------------------------- | ---------------------------------------------- |
+| `cargo pgrx run pg18`               | Build and start Postgres with extension loaded |
+| `cargo pgrx test pg18`              | Run all pgrx tests (inside real Postgres)      |
+| `cargo pgrx test pg18 -- test_name` | Run a single test                              |
+| `cargo pgrx install --release`      | Install to system Postgres                     |
+| `cargo clippy`                      | Lint                                           |
+| `cargo fmt`                         | Format                                         |
 
 ## Project Structure
 
@@ -127,14 +127,14 @@ fn grpc_call(
 
 User-supplied proto management (all `#[pg_extern]` in lib.rs):
 
-| Function | Purpose |
-|---|---|
-| `grpc_proto_stage(filename TEXT, source TEXT)` | Stage a `.proto` file for the next compile. Overwrites on duplicate filename. |
-| `grpc_proto_unstage(filename TEXT) → bool` | Remove one staged file. Returns `true` if removed. Registry untouched. |
-| `grpc_proto_unstage_all()` | Clear every staged file. Registry untouched. |
-| `grpc_proto_compile()` | Compile all staged files, resolving cross-imports and Google WKTs, then insert every service into the registry. Clears staging on success; preserves it on failure. |
-| `grpc_proto_unregister(service_name TEXT) → bool` | Remove one compiled service by fully-qualified name (e.g. `"pkg.Service"`). |
-| `grpc_proto_unregister_all()` | Remove every compiled service. Staging untouched. |
+| Function                                          | Purpose                                                                                                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grpc_proto_stage(filename TEXT, source TEXT)`    | Stage a `.proto` file for the next compile. Overwrites on duplicate filename.                                                                                       |
+| `grpc_proto_unstage(filename TEXT) → bool`        | Remove one staged file. Returns `true` if removed. Registry untouched.                                                                                              |
+| `grpc_proto_unstage_all()`                        | Clear every staged file. Registry untouched.                                                                                                                        |
+| `grpc_proto_compile()`                            | Compile all staged files, resolving cross-imports and Google WKTs, then insert every service into the registry. Clears staging on success; preserves it on failure. |
+| `grpc_proto_unregister(service_name TEXT) → bool` | Remove one compiled service by fully-qualified name (e.g. `"pkg.Service"`).                                                                                         |
+| `grpc_proto_unregister_all()`                     | Remove every compiled service. Staging untouched.                                                                                                                   |
 
 Rules for adding new functions:
 - Always `#[pg_extern]`; use `name = "..."` to rename SQL-side if needed
@@ -273,18 +273,40 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 2. In psql: `DROP EXTENSION IF EXISTS pg_grpc; CREATE EXTENSION pg_grpc;`
 3. Or: exit psql and `cargo pgrx run pg18` again
 
+## Git Workflow
+
+**Branches:** `<type>/<short-kebab-name>` — e.g. `feat/mtls`, `feat/tls-support`, `fix/validate-endpoint`, `chore/repo-housekeeping`, `test/hermetic-grpcbin-service`. Type matches the dominant commit type on the branch. Keep names short (1–3 words).
+
+**Commit messages:** `type: subject` — lowercase type, lowercase first word after the colon, ~50–60 chars, no scope, no `Co-Authored-By` trailer.
+
+| Type       | Use for                                             |
+| ---------- | --------------------------------------------------- |
+| `feat`     | new behavior, new module, new SQL function or field |
+| `fix`      | bug fix; usually has a body explaining root cause   |
+| `test`     | adding or tightening tests without behavior change  |
+| `refactor` | code reshape, no behavior change                    |
+| `docs`     | README / CLAUDE.md / inline doc updates             |
+| `chore`    | release commits, dep bumps, repo hygiene            |
+| `build`    | Cargo features, overall build config                |
+
+**Bodies:** routine `feat`/`test`/`docs`/`refactor` commits stay one line. `fix` commits get a body when the root cause is non-obvious — state what was wrong, then what changed. Wrap body at ~72 chars.
+
+**PR shape:** every branch lands via merge commit (`Merge pull request #N from <user>/<branch>`) — no squash. Inside the PR, prefer a series of small atomic commits over one big one: introduce a unit and its first test together, then layer follow-up `test:` commits on top (`feat: add channel_cache module with first lookup test` → `test: second lookup same endpoint is a cache hit` → `refactor: route grpc_call through channel_cache`).
+
+**Releases:** `chore: Release pg_grpc version X.Y.Z`, produced by `cargo release` (see Release section).
+
 ## Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| `cargo pgrx init` fails | Run inside Docker, not host |
-| Extension not found | `cargo pgrx install --release` or restart `pgrx run` |
-| Async/threading panic | Use `new_current_thread()` — never multi-thread |
-| `Proto error: service not found` | Server lacks reflection AND nothing is staged — use `grpc_proto_stage` + `grpc_proto_compile` |
-| Connection refused | Endpoint is `host:port`, no `http://` prefix |
-| Cache stale | Reconnect to get a fresh backend process (staging + registry are per-process) |
-| `grpc_proto_compile` fails | Bad file is still staged — `grpc_proto_unstage('bad.proto')` or re-stage with fixed source, then compile again. Registry is untouched by failure. |
-| Version mismatch between protox and prost-reflect | protox 0.9 needs prost-types 0.14 / prost-reflect 0.16; older protox lines pair with older prost. Don't mix. |
+| Issue                                             | Solution                                                                                                                                          |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo pgrx init` fails                           | Run inside Docker, not host                                                                                                                       |
+| Extension not found                               | `cargo pgrx install --release` or restart `pgrx run`                                                                                              |
+| Async/threading panic                             | Use `new_current_thread()` — never multi-thread                                                                                                   |
+| `Proto error: service not found`                  | Server lacks reflection AND nothing is staged — use `grpc_proto_stage` + `grpc_proto_compile`                                                     |
+| Connection refused                                | Endpoint is `host:port`, no `http://` prefix                                                                                                      |
+| Cache stale                                       | Reconnect to get a fresh backend process (staging + registry are per-process)                                                                     |
+| `grpc_proto_compile` fails                        | Bad file is still staged — `grpc_proto_unstage('bad.proto')` or re-stage with fixed source, then compile again. Registry is untouched by failure. |
+| Version mismatch between protox and prost-reflect | protox 0.9 needs prost-types 0.14 / prost-reflect 0.16; older protox lines pair with older prost. Don't mix.                                      |
 
 ## Current Limitations
 
