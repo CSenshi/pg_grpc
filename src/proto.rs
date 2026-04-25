@@ -144,6 +144,9 @@ pub fn backfill_wkts(pool: &mut DescriptorPool) -> GrpcResult<()> {
     let global = DescriptorPool::global();
     for file in global.files() {
         let name = file.name().to_owned();
+        // prost_reflect's add_file_descriptor_proto dedupes by filename
+        // already; the explicit guard here makes the user-staged-wins
+        // policy visible to readers and avoids relying on that dedup.
         if pool.get_file_by_name(&name).is_some() {
             continue;
         }

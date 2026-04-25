@@ -82,6 +82,45 @@ fn test_compile_google_wkt_import() {
     );
 }
 
+// User staging a file at a WKT filename must win: the user's StringValue
+// declares a custom field, and after compile the pool must hold *that*
+// version, not the bundled wrappers.proto's StringValue.
+#[pg_test]
+fn user_staged_wkt_name_does_not_conflict() {
+    let mut files = HashMap::new();
+    files.insert(
+        "google/protobuf/wrappers.proto".to_string(),
+        r#"
+        syntax = "proto3";
+        package google.protobuf;
+        message StringValue { string custom_value = 1; }
+        "#
+        .to_string(),
+    );
+    files.insert(
+        "service.proto".to_string(),
+        r#"
+        syntax = "proto3";
+        import "google/protobuf/wrappers.proto";
+        package custom_wkt_test;
+        service S { rpc M(Msg) returns (Msg); }
+        message Msg { google.protobuf.StringValue v = 1; }
+        "#
+        .to_string(),
+    );
+
+    let pool = crate::proto::compile_proto_files(files)
+        .expect("user wrappers.proto override should compile cleanly");
+
+    let sv = pool
+        .get_message_by_name("google.protobuf.StringValue")
+        .expect("user-staged StringValue should be present");
+    assert!(
+        sv.get_field_by_name("custom_value").is_some(),
+        "pool must hold the user's StringValue (custom_value field), not the bundled one"
+    );
+}
+
 // Regression for #31: encoding a JSON Any payload whose @type points at a WKT
 // (StringValue, lives in google/protobuf/wrappers.proto) must succeed even
 // though the user proto only imports google/protobuf/any.proto. Without the
