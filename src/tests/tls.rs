@@ -70,6 +70,28 @@ fn test_tls_parse_rejects_empty_ca_cert() {
 }
 
 #[pg_test]
+fn test_tls_parse_rejects_empty_string_fields() {
+    for field in ["ca_cert", "client_cert", "client_key", "domain_name"] {
+        let err = crate::tls::TlsConfig::parse(&serde_json::json!({ field: "" }))
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains(field), "error should name field {field}: {msg}");
+        assert!(msg.contains("must not be empty"), "{msg}");
+    }
+}
+
+#[pg_test]
+fn test_tls_parse_rejects_whitespace_only_fields() {
+    for field in ["ca_cert", "client_cert", "client_key", "domain_name"] {
+        let err = crate::tls::TlsConfig::parse(&serde_json::json!({ field: "   \t\n" }))
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains(field), "error should name field {field}: {msg}");
+        assert!(msg.contains("must not be empty"), "{msg}");
+    }
+}
+
+#[pg_test]
 fn test_tls_parse_rejects_non_object() {
     crate::tls::TlsConfig::parse(&serde_json::json!("plain-string"))
         .expect_err("non-object must fail");
