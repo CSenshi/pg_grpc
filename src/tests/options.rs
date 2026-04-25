@@ -120,3 +120,103 @@ fn test_options_parse_tls_inner_error_surfaces() {
     assert!(msg.contains("tls"), "{msg}");
     assert!(msg.contains("unknown key"), "{msg}");
 }
+
+#[pg_test]
+fn test_options_parse_max_decode_message_size_bytes_propagates() {
+    let cfg = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_decode_message_size_bytes": 67_108_864}),
+    )
+    .unwrap();
+    assert_eq!(cfg.max_decode_message_size_bytes, Some(67_108_864));
+}
+
+#[pg_test]
+fn test_options_parse_max_decode_message_size_bytes_zero_rejected() {
+    let err = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_decode_message_size_bytes": 0}),
+    )
+    .expect_err("zero must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("options.max_decode_message_size_bytes"), "{msg}");
+}
+
+#[pg_test]
+fn test_options_parse_max_decode_message_size_bytes_negative_rejected() {
+    let err = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_decode_message_size_bytes": -1}),
+    )
+    .expect_err("negative must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("options.max_decode_message_size_bytes"), "{msg}");
+}
+
+#[pg_test]
+fn test_options_parse_max_decode_message_size_bytes_above_u32_max_rejected() {
+    let err = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_decode_message_size_bytes": 4_294_967_296i64}),
+    )
+    .expect_err("above u32::MAX must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("options.max_decode_message_size_bytes"), "{msg}");
+    assert!(msg.contains("4294967295"), "must mention wire limit: {msg}");
+}
+
+#[pg_test]
+fn test_options_parse_max_decode_message_size_bytes_at_u32_max_accepted() {
+    let cfg = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_decode_message_size_bytes": 4_294_967_295u32}),
+    )
+    .unwrap();
+    assert_eq!(cfg.max_decode_message_size_bytes, Some(u32::MAX));
+}
+
+#[pg_test]
+fn test_options_parse_max_decode_message_size_bytes_string_rejected() {
+    let err = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_decode_message_size_bytes": "64MB"}),
+    )
+    .expect_err("string must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("options.max_decode_message_size_bytes"), "{msg}");
+    assert!(msg.contains("integer"), "{msg}");
+}
+
+#[pg_test]
+fn test_options_parse_max_decode_message_size_bytes_float_rejected() {
+    let err = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_decode_message_size_bytes": 1.5}),
+    )
+    .expect_err("float must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("options.max_decode_message_size_bytes"), "{msg}");
+    assert!(msg.contains("integer"), "{msg}");
+}
+
+#[pg_test]
+fn test_options_parse_max_encode_message_size_bytes_propagates() {
+    let cfg = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_encode_message_size_bytes": 4_194_304}),
+    )
+    .unwrap();
+    assert_eq!(cfg.max_encode_message_size_bytes, Some(4_194_304));
+}
+
+#[pg_test]
+fn test_options_parse_max_encode_message_size_bytes_negative_rejected() {
+    let err = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_encode_message_size_bytes": -1}),
+    )
+    .expect_err("negative must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("options.max_encode_message_size_bytes"), "{msg}");
+}
+
+#[pg_test]
+fn test_options_parse_max_encode_message_size_bytes_above_u32_max_rejected() {
+    let err = crate::options::OptionsConfig::parse(
+        &serde_json::json!({"max_encode_message_size_bytes": 4_294_967_296i64}),
+    )
+    .expect_err("above u32::MAX must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("options.max_encode_message_size_bytes"), "{msg}");
+}

@@ -38,8 +38,37 @@ impl OptionsConfig {
                 }
             };
         }
+        if let Some(v) = obj.get("max_decode_message_size_bytes") {
+            cfg.max_decode_message_size_bytes =
+                Some(parse_size_u32("max_decode_message_size_bytes", v)?);
+        }
+        if let Some(v) = obj.get("max_encode_message_size_bytes") {
+            cfg.max_encode_message_size_bytes =
+                Some(parse_size_u32("max_encode_message_size_bytes", v)?);
+        }
         Ok(cfg)
     }
+}
+
+// gRPC's wire framing uses a 4-byte length prefix; values above u32::MAX
+// can never be a valid single-message size.
+fn parse_size_u32(key: &str, value: &Value) -> GrpcResult<u32> {
+    let n = value
+        .as_i64()
+        .ok_or_else(|| GrpcError::Call(format!("options.{key} must be an integer")))?;
+    if n < 1 {
+        return Err(GrpcError::Call(format!(
+            "options.{key} must be in [1, {}] (got {n})",
+            u32::MAX
+        )));
+    }
+    if n > u32::MAX as i64 {
+        return Err(GrpcError::Call(format!(
+            "options.{key} must be in [1, {}] (got {n})",
+            u32::MAX
+        )));
+    }
+    Ok(n as u32)
 }
 
 fn parse_bool(key: &str, value: &Value) -> GrpcResult<bool> {
