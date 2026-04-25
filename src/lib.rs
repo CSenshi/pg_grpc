@@ -6,6 +6,7 @@ mod call;
 mod channel_cache;
 mod endpoint;
 mod error;
+mod options;
 mod proto;
 mod proto_registry;
 mod proto_staging;
