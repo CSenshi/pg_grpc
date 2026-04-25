@@ -123,7 +123,7 @@ fn grpc_call(
 
 `metadata` is a JSON object whose values are strings or arrays of strings. Keys are silently lowercased. Keys ending in `-bin` (binary metadata) are rejected in v1.
 
-`tls` controls transport security. `NULL` (default) keeps the current plaintext behavior; `'{}'::jsonb` turns on TLS with the OS trust store; `'{"ca_cert": "<PEM>"}'::jsonb` adds a private-CA root on top. Reflection runs over the same channel, so `use_reflection => true` with a non-null `tls` reflects over TLS. Parsing is strict: unknown keys and empty-string values raise a `Connection error`. mTLS (`client_cert`, `client_key`) and SNI override (`domain_name`) are not yet implemented.
+`tls` controls transport security. `NULL` (default) keeps the current plaintext behavior; `'{}'::jsonb` turns on TLS with the OS trust store; `'{"ca_cert": "<PEM>"}'::jsonb` adds a private-CA root on top. Reflection runs over the same channel, so `use_reflection => true` with a non-null `tls` reflects over TLS. Parsing is strict: unknown keys and empty- or whitespace-only string values raise a `Connection error`. The accepted fields are `ca_cert`, `client_cert`, `client_key`, and `domain_name`. For mTLS, `client_cert` and `client_key` must be set together (one without the other is a parse error); when both are present they're attached as a tonic `Identity`. `domain_name` overrides the SNI / certificate-verification name — needed for IP endpoints or when the server cert's CN/SAN doesn't match the dialed host.
 
 User-supplied proto management (all `#[pg_extern]` in lib.rs):
 
@@ -288,7 +288,6 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 
 ## Current Limitations
 
-- **Server-auth TLS only** — mTLS (`client_cert`, `client_key`) and SNI override (`domain_name`) not yet wired
 - **Unary RPCs only** — streaming methods not supported
 - **Multi-file proto imports must use filenames that match staging keys** — `import "common.proto";` only resolves if someone ran `grpc_proto_stage('common.proto', ...)`
 
