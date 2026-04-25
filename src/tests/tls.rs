@@ -200,6 +200,23 @@ fn test_cache_key_same_endpoint_different_tls_ne() {
     assert_ne!(k_plain, k_tls_ca);
 }
 
+// Smoke test: building a tonic ClientTlsConfig from a full mTLS+SNI TlsConfig
+// must not panic. tonic's ClientTlsConfig doesn't expose its internals, so we
+// verify wiring by constructing the value and trusting tonic to honor what
+// `identity` / `domain_name` set. Real TLS handshake coverage lives in the
+// existing server-auth e2e test; mTLS e2e is intentionally out of scope here.
+#[pg_test]
+fn test_build_client_tls_config_full_mtls_sni() {
+    let cfg = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "ca_cert": "-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----\n",
+        "client_cert": "-----BEGIN CERTIFICATE-----\nC\n-----END CERTIFICATE-----\n",
+        "client_key": "-----BEGIN PRIVATE KEY-----\nK\n-----END PRIVATE KEY-----\n",
+        "domain_name": "internal.example.com",
+    }))
+    .unwrap();
+    let _ = cfg.build_client_tls_config();
+}
+
 // End-to-end: real TLS handshake + reflection + unary call against grpcb.in:9001
 // using the system trust store. Matches how the existing plaintext tests hit
 // grpcb.in:9000 — relies on outbound network, same as the rest of the suite.

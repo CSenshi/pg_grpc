@@ -1,5 +1,5 @@
 use serde_json::Value;
-use tonic::transport::{Certificate, ClientTlsConfig};
+use tonic::transport::{Certificate, ClientTlsConfig, Identity};
 
 use crate::error::{GrpcError, GrpcResult};
 
@@ -65,6 +65,12 @@ impl TlsConfig {
         let mut cfg = ClientTlsConfig::new().with_native_roots();
         if let Some(ca_cert) = &self.ca_cert {
             cfg = cfg.ca_certificate(Certificate::from_pem(ca_cert.clone()));
+        }
+        if let (Some(cert), Some(key)) = (&self.client_cert, &self.client_key) {
+            cfg = cfg.identity(Identity::from_pem(cert.clone(), key.clone()));
+        }
+        if let Some(domain) = &self.domain_name {
+            cfg = cfg.domain_name(domain.clone());
         }
         cfg
     }
