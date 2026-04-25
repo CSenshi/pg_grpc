@@ -12,6 +12,7 @@ use crate::error::{GrpcError, GrpcResult};
 use crate::proto;
 use crate::tls::TlsConfig;
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_grpc_call(
     endpoint: &str,
     method: &str,
@@ -67,8 +68,7 @@ async fn call_async(
         Some(pool) => pool,
         None if use_reflection => {
             let pool =
-                proto::fetch_pool(channel.clone(), &service_name, max_decode, max_encode)
-                    .await?;
+                proto::fetch_pool(channel.clone(), &service_name, max_decode, max_encode).await?;
             crate::proto_registry::insert_proto_reflection(
                 &service_name,
                 pool.clone(),
