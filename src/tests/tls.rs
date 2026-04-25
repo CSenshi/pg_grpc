@@ -31,6 +31,28 @@ fn test_tls_parse_full_config_populates_all_fields() {
 }
 
 #[pg_test]
+fn test_tls_parse_rejects_client_cert_without_key() {
+    let err = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "client_cert": "-----BEGIN CERTIFICATE-----\nC\n-----END CERTIFICATE-----\n",
+    }))
+    .expect_err("client_cert without client_key must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("client_cert"), "{msg}");
+    assert!(msg.contains("client_key"), "{msg}");
+}
+
+#[pg_test]
+fn test_tls_parse_rejects_client_key_without_cert() {
+    let err = crate::tls::TlsConfig::parse(&serde_json::json!({
+        "client_key": "-----BEGIN PRIVATE KEY-----\nK\n-----END PRIVATE KEY-----\n",
+    }))
+    .expect_err("client_key without client_cert must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("client_cert"), "{msg}");
+    assert!(msg.contains("client_key"), "{msg}");
+}
+
+#[pg_test]
 fn test_tls_parse_rejects_unknown_key() {
     let err =
         crate::tls::TlsConfig::parse(&serde_json::json!({ "not_a_field": "x" }))

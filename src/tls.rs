@@ -39,6 +39,20 @@ impl TlsConfig {
         let client_key = parse_pem_field(obj, "client_key")?;
         let domain_name = parse_string_field(obj, "domain_name")?;
 
+        match (&client_cert, &client_key) {
+            (Some(_), None) => {
+                return Err(GrpcError::Connection(
+                    "tls: client_cert requires client_key".into(),
+                ));
+            }
+            (None, Some(_)) => {
+                return Err(GrpcError::Connection(
+                    "tls: client_key requires client_cert".into(),
+                ));
+            }
+            _ => {}
+        }
+
         Ok(Self {
             ca_cert,
             client_cert,
