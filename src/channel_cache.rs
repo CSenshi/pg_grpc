@@ -5,23 +5,40 @@ use tonic::transport::Channel;
 
 use crate::endpoint::validate_endpoint;
 use crate::error::{GrpcError, GrpcResult};
+use crate::tls::TlsConfig;
 
-// Process-global Channel cache, keyed by the validated endpoint string.
-// tonic::transport::Channel is Arc-backed, so clones share the same underlying
-// connection pool and HTTP/2 session, including its auto-reconnect behavior.
-static CHANNELS: LazyLock<RwLock<HashMap<String, Channel>>> =
+// Cache key is (endpoint, Option<TlsConfig>) so two calls with the same host
+// but different TLS settings resolve to distinct Channels.
+type Key = (String, Option<TlsConfig>);
+
+static CHANNELS: LazyLock<RwLock<HashMap<Key, Channel>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-pub async fn get_or_connect(endpoint: &str) -> GrpcResult<Channel> {
-    let key = validate_endpoint(endpoint)?;
+pub async fn get_or_connect(endpoint: &str, tls: Option<&TlsConfig>) -> GrpcResult<Channel> {
+    let host = validate_endpoint(endpoint)?;
+    let key: Key = (host.clone(), tls.cloned());
+
     if let Some(channel) = CHANNELS.read().get(&key).cloned() {
         return Ok(channel);
     }
-    let channel = Channel::from_shared(format!("http://{key}"))
-        .map_err(|e| GrpcError::Connection(e.to_string()))?
+
+    // Scheme flips to https so tonic's transport negotiates ALPN/TLS; the
+    // host part is identical to the plaintext case.
+    let scheme = if tls.is_some() { "https" } else { "http" };
+    let mut builder = Channel::from_shared(format!("{scheme}://{host}"))
+        .map_err(|e| GrpcError::Connection(e.to_string()))?;
+
+    if let Some(tls_cfg) = tls {
+        builder = builder
+            .tls_config(tls_cfg.build_client_tls_config())
+            .map_err(|e| GrpcError::Connection(format!("TLS config: {e}")))?;
+    }
+
+    let channel = builder
         .connect()
         .await
-        .map_err(|e| GrpcError::Connection(format!("{key}: {e}")))?;
+        .map_err(|e| GrpcError::Connection(format!("{host}: {e}")))?;
+
     Ok(CHANNELS.write().entry(key).or_insert(channel).clone())
 }
 

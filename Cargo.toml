@@ -30,8 +30,15 @@ pgrx        = "=0.18.0"
 serde_json  = "1"
 
 # gRPC transport
-tonic             = { version = "0.14", default-features = false, features = ["channel", "codegen"] }
+# tls-ring: pure-Rust rustls backend using the `ring` crypto provider.
+# tls-native-roots: pick up the OS trust store as the default root set.
+tonic             = { version = "0.14", default-features = false, features = ["channel", "codegen", "tls-ring", "tls-native-roots"] }
 tonic-reflection  = { version = "0.14", default-features = false }
+
+# Exposed so we can install the `ring` crypto provider exactly once at
+# _PG_init — the first TLS handshake would otherwise pick lazily and panic
+# if multiple providers are compiled in.
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 # Protobuf encode/decode + dynamic reflection
 prost         = "0.14"

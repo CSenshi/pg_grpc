@@ -53,6 +53,7 @@ fn test_registry_precedence_over_reflection() {
         None,
         None,
         None,
+        None,
     );
     assert_eq!(result.0["renamed_field"], "winner");
     assert!(

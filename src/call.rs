@@ -10,6 +10,7 @@ use tonic::transport::Channel;
 use crate::channel_cache;
 use crate::error::{GrpcError, GrpcResult};
 use crate::proto;
+use crate::tls::TlsConfig;
 
 pub fn make_grpc_call(
     endpoint: &str,
@@ -18,6 +19,7 @@ pub fn make_grpc_call(
     use_reflection: bool,
     metadata: Option<serde_json::Value>,
     timeout_ms: u64,
+    tls: Option<TlsConfig>,
 ) -> GrpcResult<serde_json::Value> {
     // pgrx backends are single-threaded; a multi-thread runtime would unsafely cross the Postgres boundary.
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -27,7 +29,14 @@ pub fn make_grpc_call(
     rt.block_on(async {
         match tokio::time::timeout(
             std::time::Duration::from_millis(timeout_ms),
-            call_async(endpoint, method, request_json, use_reflection, metadata),
+            call_async(
+                endpoint,
+                method,
+                request_json,
+                use_reflection,
+                metadata,
+                tls,
+            ),
         )
         .await
         {
@@ -43,9 +52,10 @@ async fn call_async(
     request_json: serde_json::Value,
     use_reflection: bool,
     metadata: Option<serde_json::Value>,
+    tls: Option<TlsConfig>,
 ) -> GrpcResult<serde_json::Value> {
     let (service_name, method_name) = parse_method(method)?;
-    let channel = channel_cache::get_or_connect(endpoint).await?;
+    let channel = channel_cache::get_or_connect(endpoint, tls.as_ref()).await?;
     let pool = match crate::proto_registry::get_proto(&service_name) {
         Some(pool) => pool,
         None if use_reflection => {

@@ -37,9 +37,12 @@ SELECT grpc_call('localhost:50051', 'pkg.Service/Method', '{"foo": "bar"}'::json
 
 ```
 src/
-├── lib.rs              # pg_module_magic!(), all #[pg_extern] SQL functions, #[pg_test]s
+├── lib.rs              # pg_module_magic!(), _PG_init (rustls ring), all #[pg_extern] SQL functions, #[pg_test]s
 ├── error.rs            # Centralized GrpcError enum + GrpcResult<T> type alias
-├── call.rs             # gRPC call orchestration: parse_method → connect → resolve_pool → encode → unary_call → decode
+├── call.rs             # gRPC call orchestration: parse_method → channel_cache → resolve_pool → encode → unary_call → decode
+├── channel_cache.rs    # CHANNELS static: (endpoint, Option<TlsConfig>) → Channel, with auto-reconnect via tonic
+├── endpoint.rs         # validate_endpoint: reject scheme/path/empty, trim whitespace
+├── tls.rs              # TlsConfig: strict JSONB parsing → tonic::transport::ClientTlsConfig
 ├── proto.rs            # Reflection (fetch_pool) + user-supplied proto compilation (compile_proto_files)
 ├── proto_staging.rs    # PENDING_FILES static: grpc_proto_stage writes here, grpc_proto_compile drains
 └── proto_registry.rs   # PROTO_REGISTRY static: compiled DescriptorPools keyed by fully-qualified service name
@@ -51,7 +54,8 @@ pg_grpc.control         # Extension metadata (name, version, schema, superuser)
 ## Dependencies
 
 - **pgrx 0.18** — Postgres extension framework
-- **tonic 0.14 / tonic-reflection 0.14** — gRPC client, reflection
+- **tonic 0.14 / tonic-reflection 0.14** — gRPC client, reflection (features `channel`, `codegen`, `tls-ring`, `tls-native-roots`)
+- **rustls 0.23** (`ring` feature) — provider installed once at `_PG_init`
 - **prost 0.14 / prost-types 0.14 / prost-reflect 0.16** — protobuf encode/decode + dynamic schema
 - **protox 0.9** — pure-Rust `.proto` compiler (used by `compile_proto_files`)
 - **once_cell + parking_lot** — process-global staging / registry statics
@@ -113,10 +117,13 @@ fn grpc_call(
     metadata: default!(Option<pgrx::JsonB>, "null"),   // gRPC metadata / headers
     timeout_ms: default!(Option<i64>, "null"),         // defaults to 30_000ms; must be > 0
     use_reflection: default!(Option<bool>, "true"),
+    tls: default!(Option<pgrx::JsonB>, "null"),        // NULL → plaintext; object → TLS
 ) -> pgrx::JsonB
 ```
 
 `metadata` is a JSON object whose values are strings or arrays of strings. Keys are silently lowercased. Keys ending in `-bin` (binary metadata) are rejected in v1.
+
+`tls` controls transport security. `NULL` (default) keeps the current plaintext behavior; `'{}'::jsonb` turns on TLS with the OS trust store; `'{"ca_cert": "<PEM>"}'::jsonb` adds a private-CA root on top. Reflection runs over the same channel, so `use_reflection => true` with a non-null `tls` reflects over TLS. Parsing is strict: unknown keys and empty-string values raise a `Connection error`. mTLS (`client_cert`, `client_key`) and SNI override (`domain_name`) are not yet implemented.
 
 User-supplied proto management (all `#[pg_extern]` in lib.rs):
 
@@ -211,10 +218,12 @@ The `InMemoryResolver` in `proto.rs` implements `protox::file::FileResolver` —
 ## Proto Resolution Flow (full picture)
 
 ```
-grpc_call("host:port", "pkg.Service/Method", {...})
+grpc_call("host:port", "pkg.Service/Method", {...}, tls => NULL | '{...}')
     │
     ├─► parse_method → ("pkg.Service", "Method")
-    ├─► connect(endpoint)                          (new Channel every call — no caching)
+    ├─► tls::TlsConfig::parse(tls) (if non-null, strict; unknown keys rejected)
+    ├─► channel_cache::get_or_connect(endpoint, tls)
+    │       key = (endpoint, Option<TlsConfig>); http:// when tls is None, https:// otherwise
     ├─► proto_registry::get_proto("pkg.Service")
     │       ├─► hit  → use cached pool (user-staged or reflection)
     │       └─► miss → proto::fetch_pool via reflection, then insert_reflection
@@ -242,7 +251,7 @@ mod tests {
             "grpcb.in:9000",
             "grpcbin.GRPCBin/DummyUnary",
             pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
-            None,
+            None, None, None, None,
         );
         assert_eq!(result.0["f_string"], "hello");
     }
@@ -279,16 +288,15 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 
 ## Current Limitations
 
-- **HTTP only** — TLS/mTLS not supported (no `tonic::transport::ClientTlsConfig` wiring yet)
+- **Server-auth TLS only** — mTLS (`client_cert`, `client_key`) and SNI override (`domain_name`) not yet wired
 - **Unary RPCs only** — streaming methods not supported
-- **No connection caching** — fresh TCP + HTTP/2 handshake on every `grpc_call`
 - **Multi-file proto imports must use filenames that match staging keys** — `import "common.proto";` only resolves if someone ran `grpc_proto_stage('common.proto', ...)`
 
 ## API Summary
 
 ```sql
 -- gRPC call
-grpc_call(endpoint TEXT, method TEXT, request JSONB [, metadata JSONB] [, timeout_ms BIGINT] [, use_reflection BOOLEAN]) RETURNS JSONB
+grpc_call(endpoint TEXT, method TEXT, request JSONB [, metadata JSONB] [, timeout_ms BIGINT] [, use_reflection BOOLEAN] [, tls JSONB]) RETURNS JSONB
 
 -- Staging
 grpc_proto_stage(filename TEXT, source TEXT) RETURNS VOID
