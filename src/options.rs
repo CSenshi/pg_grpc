@@ -3,6 +3,14 @@ use serde_json::Value;
 use crate::error::{GrpcError, GrpcResult};
 use crate::tls::TlsConfig;
 
+const ACCEPTED_KEYS: &[&str] = &[
+    "timeout_ms",
+    "use_reflection",
+    "tls",
+    "max_decode_message_size_bytes",
+    "max_encode_message_size_bytes",
+];
+
 #[derive(Debug, Default)]
 pub struct OptionsConfig {
     pub timeout_ms: Option<u64>,
@@ -17,8 +25,22 @@ impl OptionsConfig {
         let obj = match value {
             Value::Null => return Ok(Self::default()),
             Value::Object(m) => m,
-            _ => unreachable!("non-null/non-object handled in later cycle"),
+            _ => {
+                return Err(GrpcError::Call(format!(
+                    "options must be a JSON object (accepted keys: {})",
+                    ACCEPTED_KEYS.join(", ")
+                )));
+            }
         };
+
+        for key in obj.keys() {
+            if !ACCEPTED_KEYS.contains(&key.as_str()) {
+                return Err(GrpcError::Call(format!(
+                    "options: unknown key '{key}' (accepted keys: {})",
+                    ACCEPTED_KEYS.join(", ")
+                )));
+            }
+        }
 
         let mut cfg = Self::default();
         if let Some(v) = obj.get("timeout_ms") {

@@ -220,3 +220,56 @@ fn test_options_parse_max_encode_message_size_bytes_above_u32_max_rejected() {
     let msg = err.to_string();
     assert!(msg.contains("options.max_encode_message_size_bytes"), "{msg}");
 }
+
+#[pg_test]
+fn test_options_parse_unknown_key_rejected_with_accepted_keys_listed() {
+    let err = crate::options::OptionsConfig::parse(&serde_json::json!({"tiemout_ms": 5000}))
+        .expect_err("unknown key must fail");
+    let msg = err.to_string();
+    assert!(msg.contains("unknown"), "{msg}");
+    assert!(msg.contains("tiemout_ms"), "must echo offending key: {msg}");
+    for key in [
+        "timeout_ms",
+        "use_reflection",
+        "tls",
+        "max_decode_message_size_bytes",
+        "max_encode_message_size_bytes",
+    ] {
+        assert!(msg.contains(key), "accepted key {key} not in error: {msg}");
+    }
+}
+
+#[pg_test]
+fn test_options_parse_non_object_rejected() {
+    for non_obj in [
+        serde_json::json!("plain-string"),
+        serde_json::json!([1, 2, 3]),
+        serde_json::json!(42),
+        serde_json::json!(true),
+    ] {
+        let err = crate::options::OptionsConfig::parse(&non_obj)
+            .expect_err("non-object must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("options must be a JSON object"),
+            "unexpected: {msg}"
+        );
+    }
+}
+
+#[pg_test]
+fn test_options_parse_full_blob_propagates_every_key() {
+    let cfg = crate::options::OptionsConfig::parse(&serde_json::json!({
+        "timeout_ms": 5000,
+        "use_reflection": false,
+        "tls": {"ca_cert": "PEM"},
+        "max_decode_message_size_bytes": 67_108_864,
+        "max_encode_message_size_bytes": 4_194_304,
+    }))
+    .unwrap();
+    assert_eq!(cfg.timeout_ms, Some(5000));
+    assert_eq!(cfg.use_reflection, Some(false));
+    assert!(cfg.tls.is_some());
+    assert_eq!(cfg.max_decode_message_size_bytes, Some(67_108_864));
+    assert_eq!(cfg.max_encode_message_size_bytes, Some(4_194_304));
+}
