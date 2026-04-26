@@ -76,6 +76,32 @@ const config: Config = {
   ],
 
   themeConfig: {
+    image: 'img/og.png',
+    metadata: [
+      {
+        name: 'description',
+        content:
+          'PostgreSQL extension to call gRPC services directly from SQL',
+      },
+      {
+        name: 'keywords',
+        content:
+          'postgresql, postgres, grpc, extension, rust, pgrx, protobuf, sql, tonic, pg',
+      },
+      {property: 'og:type', content: 'website'},
+      {property: 'og:site_name', content: 'pg_grpc'},
+      {property: 'og:image:width', content: '900'},
+      {property: 'og:image:height', content: '450'},
+      {
+        property: 'og:image:alt',
+        content: 'pg_grpc — Make gRPC calls directly from PostgreSQL',
+      },
+      {name: 'twitter:card', content: 'summary_large_image'},
+      {
+        name: 'twitter:image:alt',
+        content: 'pg_grpc — Make gRPC calls directly from PostgreSQL',
+      },
+    ],
     colorMode: {
       defaultMode: 'dark',
       disableSwitch: true,
