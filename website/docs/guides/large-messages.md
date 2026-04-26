@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Large messages
 
-gRPC ships with a hard size cap on every message in both directions. The defaults are conservative — bump them when you know your payloads exceed them.
+gRPC ships with a hard size cap on every message in both directions. The defaults are conservative - bump them when you know your payloads exceed them.
 
 ## Defaults
 
@@ -33,7 +33,7 @@ The value is in raw bytes.
 
 ## Setting an encode guardrail
 
-The default is unbounded — you can push arbitrarily large requests, limited only by available memory and the wire ceiling below. To set a guardrail (so a runaway query that builds a huge JSONB doesn't try to send a 2 GB request), use `max_encode_message_size_bytes`:
+The default is unbounded - you can push arbitrarily large requests, limited only by available memory and the wire ceiling below. To set a guardrail (so a runaway query that builds a huge JSONB doesn't try to send a 2 GB request), use `max_encode_message_size_bytes`:
 
 ```sql
 SELECT grpc_call(
@@ -46,7 +46,7 @@ SELECT grpc_call(
 
 ## Wire ceiling
 
-Both knobs accept any 32-bit unsigned integer up to **4 294 967 295** (`2^32 - 1`). That's the absolute upper bound — gRPC frames each message with a 4-byte length prefix, so a single message can never exceed it on the wire. Asking for more is rejected at parse time:
+Both knobs accept any 32-bit unsigned integer up to **4 294 967 295** (`2^32 - 1`). That's the absolute upper bound - gRPC frames each message with a 4-byte length prefix, so a single message can never exceed it on the wire. Asking for more is rejected at parse time:
 
 ```
 Connection error: options.max_decode_message_size_bytes must be in [1, 4294967295]
@@ -65,8 +65,4 @@ SELECT grpc_call(
 );
 ```
 
-If you're sure the response is small but the reflection is huge, the same knob lets reflection through without changing how big a unary response you'll accept on subsequent calls — both share the limit.
-
-## When to pre-stage instead
-
-If you hit reflection-size limits regularly, the cleaner fix is to bypass reflection entirely with `grpc_proto_stage` + `grpc_proto_compile` (see [User-supplied protos](/guides/user-supplied-protos)). The proto compiler runs in-process and isn't bound by gRPC framing.
+If you're sure the response is small but the reflection is huge, the same knob lets reflection through without changing how big a unary response you'll accept on subsequent calls - both share the limit.

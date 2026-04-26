@@ -7,9 +7,23 @@ sidebar_position: 1
 
 Connection security lives inside the `options.tls` JSONB sub-object. Four scenarios are covered, each progressively more restrictive.
 
+:::info[HTTP vs HTTPS - the switch is the `tls` option]
+
+The presence of `options.tls` decides the wire protocol. There is no `http`/`https` prefix on the endpoint; the scheme is implied:
+
+| `options.tls`                | Wire protocol                |
+| ---------------------------- | ---------------------------- |
+| omitted or `options` absent | **HTTP/2 plaintext** (h2c)   |
+| `'{}'::jsonb` (empty object) | **HTTPS** (OS trust store)   |
+| `'{...}'::jsonb` (populated) | **HTTPS** (with CA / mTLS)   |
+
+So `'{"tls": {}}'::jsonb` is the minimum to flip a call from HTTP to HTTPS — the empty object is meaningful, not a no-op.
+
+:::
+
 ## Plaintext (default)
 
-Omit `options.tls`, or omit `options` entirely.
+Omit `options.tls` or omit `options` entirely.
 
 ```sql
 SELECT grpc_call('localhost:50051', 'pkg.S/M', '{}'::jsonb);
@@ -19,7 +33,7 @@ The endpoint is dialed over plain HTTP/2. Use only on trusted networks (loopback
 
 ## TLS with the OS trust store
 
-Set `tls` to an empty object. pg_grpc dials with [tonic's native-roots](https://docs.rs/tonic/latest/tonic/transport/struct.ClientTlsConfig.html) — the same CA bundle your OS uses for `curl`, `wget`, etc.
+Set `tls` to an empty object. pg_grpc dials with tonic's native-roots - the same CA bundle your OS uses for `curl`, `wget`, etc.
 
 ```sql
 SELECT grpc_call(
@@ -34,7 +48,7 @@ Use this for any service with a publicly-trusted certificate.
 
 ## TLS with a private CA
 
-Layer in a PEM-encoded root via `ca_cert`. The OS trust store remains in effect — your private CA is **added** to it, not substituted for it.
+Layer in a PEM-encoded root via `ca_cert`. The OS trust store remains in effect - your private CA is **added** to it, not substituted for it.
 
 ```sql
 SELECT grpc_call(
@@ -71,7 +85,7 @@ SELECT grpc_call(
 );
 ```
 
-:::warning Both halves required
+:::warning[Both halves required]
 
 `client_cert` and `client_key` must be set together. Supplying one without the other is a parse error:
 
@@ -83,7 +97,7 @@ Connection error: tls: client_cert requires client_key
 
 ## SNI / domain-name override
 
-When dialing an IP literal, or any endpoint where the certificate's CN/SAN won't match the hostname you typed, set `domain_name`. It is used as both the SNI value and the cert-verification name.
+When dialing an IP literal or any endpoint where the certificate's CN/SAN won't match the hostname you typed, set `domain_name`. It is used as both the SNI value and the cert-verification name.
 
 ```sql
 SELECT grpc_call(

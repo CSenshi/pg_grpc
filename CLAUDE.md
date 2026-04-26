@@ -49,29 +49,29 @@ src/
 pg_grpc.control         # Extension metadata (name, version, schema, superuser)
 ```
 
-`sql/` is not used — all schema is generated from `#[pg_extern]` attributes by pgrx.
+`sql/` is not used - all schema is generated from `#[pg_extern]` attributes by pgrx.
 
 ## Dependencies
 
-- **pgrx 0.18** — Postgres extension framework
-- **tonic 0.14 / tonic-reflection 0.14** — gRPC client, reflection (features `channel`, `codegen`, `tls-ring`, `tls-native-roots`)
-- **rustls 0.23** (`ring` feature) — provider installed once at `_PG_init`
-- **prost 0.14 / prost-types 0.14 / prost-reflect 0.16** — protobuf encode/decode + dynamic schema
-- **protox 0.9** — pure-Rust `.proto` compiler (used by `compile_proto_files`)
-- **once_cell + parking_lot** — process-global staging / registry statics
-- **tokio (rt, net, time)** — single-threaded runtime per SQL call
-- **thiserror, futures, http, bytes, serde, serde_json** — support
+- **pgrx 0.18** - Postgres extension framework
+- **tonic 0.14 / tonic-reflection 0.14** - gRPC client, reflection (features `channel`, `codegen`, `tls-ring`, `tls-native-roots`)
+- **rustls 0.23** (`ring` feature) - provider installed once at `_PG_init`
+- **prost 0.14 / prost-types 0.14 / prost-reflect 0.16** - protobuf encode/decode + dynamic schema
+- **protox 0.9** - pure-Rust `.proto` compiler (used by `compile_proto_files`)
+- **once_cell + parking_lot** - process-global staging / registry statics
+- **tokio (rt, net, time)** - single-threaded runtime per SQL call
+- **thiserror, futures, http, bytes, serde, serde_json** - support
 
 All version constraints are pinned tightly; don't bump individual crates without re-running `cargo pgrx test pg18` (protox, prost, prost-reflect, and tonic must all agree on `prost-types` major versions).
 
 ## Code Style
 
 - Rust 2021 edition
-- Use `thiserror` for error types — never `impl Error` by hand
+- Use `thiserror` for error types - never `impl Error` by hand
 - Use `pgrx::JsonB` for JSON parameters and returns, not `String`
 - Prefer `parking_lot::RwLock` over `std::sync::RwLock`
 - All SQL-exposed functions: snake_case (`grpc_call`, not `grpcCall`)
-- Use `Arc<T>` (or `Arc`-backed types like `DescriptorPool`, `Channel`) for data shared across SQL calls — clone out of the lock, release the lock before use, never hold a lock across an `await`
+- Use `Arc<T>` (or `Arc`-backed types like `DescriptorPool`, `Channel`) for data shared across SQL calls - clone out of the lock, release the lock before use, never hold a lock across an `await`
 
 ## Errors
 
@@ -102,7 +102,7 @@ match result {
 ```
 
 Rules:
-- NEVER panic — use `Result` and convert at the SQL boundary
+- NEVER panic - use `Result` and convert at the SQL boundary
 - NEVER `unwrap()` in library code; only in tests
 - Map `tonic::Status` variants to meaningful `GrpcError` variants
 
@@ -126,7 +126,7 @@ fn grpc_call(
 | Key                              | Type    | Validation                | Default behavior when omitted                 |
 | -------------------------------- | ------- | ------------------------- | --------------------------------------------- |
 | `timeout_ms`                     | integer | `>= 1`                    | 30_000 ms                                     |
-| `use_reflection`                 | boolean | —                         | `true`                                        |
+| `use_reflection`                 | boolean | -                         | `true`                                        |
 | `tls`                            | object  | delegated to TLS parser   | NULL → plaintext                              |
 | `max_decode_message_size_bytes`  | integer | `[1, 4_294_967_295]`      | tonic default (4 MiB)                         |
 | `max_encode_message_size_bytes`  | integer | `[1, 4_294_967_295]`      | tonic default (unbounded)                     |
@@ -144,9 +144,9 @@ SELECT grpc_call('host:port', 'pkg.S/M', '{}'::jsonb,
   }'::jsonb);
 ```
 
-The size knobs apply to both the unary call and the reflection fetch on the same channel — a generous decode limit lets you both receive a large response and reflect a large schema. The 4_294_967_295 ceiling is the gRPC wire framing limit (4-byte length prefix); larger values can never be a valid single-message size.
+The size knobs apply to both the unary call and the reflection fetch on the same channel - a generous decode limit lets you both receive a large response and reflect a large schema. The 4_294_967_295 ceiling is the gRPC wire framing limit (4-byte length prefix); larger values can never be a valid single-message size.
 
-`tls` (when supplied) controls transport security. `'{}'::jsonb` turns on TLS with the OS trust store; `'{"ca_cert": "<PEM>"}'::jsonb` adds a private-CA root on top. Reflection runs over the same channel, so `use_reflection => true` with a non-null `tls` reflects over TLS. The accepted inner fields are `ca_cert`, `client_cert`, `client_key`, and `domain_name`. For mTLS, `client_cert` and `client_key` must be set together (one without the other is a parse error); when both are present they're attached as a tonic `Identity`. `domain_name` overrides the SNI / certificate-verification name — needed for IP endpoints or when the server cert's CN/SAN doesn't match the dialed host.
+`tls` (when supplied) controls transport security. `'{}'::jsonb` turns on TLS with the OS trust store; `'{"ca_cert": "<PEM>"}'::jsonb` adds a private-CA root on top. Reflection runs over the same channel, so `use_reflection => true` with a non-null `tls` reflects over TLS. The accepted inner fields are `ca_cert`, `client_cert`, `client_key`, and `domain_name`. For mTLS, `client_cert` and `client_key` must be set together (one without the other is a parse error); when both are present they're attached as a tonic `Identity`. `domain_name` overrides the SNI / certificate-verification name - needed for IP endpoints or when the server cert's CN/SAN doesn't match the dialed host.
 
 User-supplied proto management (all `#[pg_extern]` in lib.rs):
 
@@ -180,7 +180,7 @@ fn make_grpc_call() -> GrpcResult<JsonB> {
 }
 ```
 
-One runtime per SQL function call — do not store a runtime in global state.
+One runtime per SQL function call - do not store a runtime in global state.
 
 ## Proto Resolution
 
@@ -211,10 +211,10 @@ let pool = match proto_registry::get_proto(&service_name) {
 ### 1. User-supplied proto (via staging → compile → registry)
 
 ```rust
-// proto_staging.rs — pending files awaiting compile
+// proto_staging.rs - pending files awaiting compile
 static PENDING_FILES: Lazy<RwLock<HashMap<String, String>>> = ...;
 
-// proto_registry.rs — entries keyed by fully-qualified service name, each tagged with Origin
+// proto_registry.rs - entries keyed by fully-qualified service name, each tagged with Origin
 static PROTO_REGISTRY: LazyLock<RwLock<HashMap<String, RegisteredService>>> = ...;
 ```
 
@@ -232,13 +232,13 @@ grpc_proto_compile()
   └─ PENDING_FILES.clear() on success; leave intact on error
 ```
 
-The `InMemoryResolver` in `proto.rs` implements `protox::file::FileResolver` — it serves staged files by filename. It's chained with `GoogleFileResolver` so imports like `google/protobuf/timestamp.proto` resolve against protox's bundled WKT copies. No filesystem, no network.
+The `InMemoryResolver` in `proto.rs` implements `protox::file::FileResolver` - it serves staged files by filename. It's chained with `GoogleFileResolver` so imports like `google/protobuf/timestamp.proto` resolve against protox's bundled WKT copies. No filesystem, no network.
 
 After compile, `backfill_wkts` seeds every pool with `prost_reflect::DescriptorPool::global()`'s bundled WKTs. This lets `Any` payloads referencing a WKT (`google.protobuf.StringValue`, `Timestamp`, `Duration`, …) resolve at encode time even when the user proto only imports `any.proto`. User-staged files keep priority: same-name files added before the backfill are not overridden.
 
 ### 2. Reflection (fallback when nothing is registered)
 
-`proto::fetch_pool(channel, service_name)` calls the server's `grpc.reflection.v1alpha.ServerReflection` service with a `FileContainingSymbol` request, decodes the streamed `FileDescriptorProto`s, and builds a `DescriptorPool`. The first call for a given service populates `PROTO_REGISTRY` with `Origin::Reflection { endpoint }`; subsequent calls hit the cache. Reflection caching is per-backend-process — reconnect (or `grpc_proto_unregister`) to force a refresh.
+`proto::fetch_pool(channel, service_name)` calls the server's `grpc.reflection.v1alpha.ServerReflection` service with a `FileContainingSymbol` request, decodes the streamed `FileDescriptorProto`s, and builds a `DescriptorPool`. The first call for a given service populates `PROTO_REGISTRY` with `Origin::Reflection { endpoint }`; subsequent calls hit the cache. Reflection caching is per-backend-process - reconnect (or `grpc_proto_unregister`) to force a refresh.
 
 ## Proto Resolution Flow (full picture)
 
@@ -288,7 +288,7 @@ cargo pgrx test pg18                                  # all tests
 cargo pgrx test pg18 -- test_grpc_call_dummyunary     # single test
 ```
 
-`#[cfg(any(test, feature = "pg_test"))]` — both conditions are required for the pgrx test runner. Existing tests target `grpcb.in:9000` as a real endpoint — they will fail if the process has no outbound network.
+`#[cfg(any(test, feature = "pg_test"))]` - both conditions are required for the pgrx test runner. Existing tests target `grpcb.in:9000` as a real endpoint - they will fail if the process has no outbound network.
 
 Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES` statics are shared across tests in one run. Each test that mutates them should clean up at the end (`grpc_proto_unregister_all` / `grpc_proto_unstage_all`) to avoid affecting siblings.
 
@@ -300,9 +300,9 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 
 ## Git Workflow
 
-**Branches:** `<type>/<short-kebab-name>` — e.g. `feat/mtls`, `feat/tls-support`, `fix/validate-endpoint`, `chore/repo-housekeeping`, `test/hermetic-grpcbin-service`. Type matches the dominant commit type on the branch. Keep names short (1–3 words).
+**Branches:** `<type>/<short-kebab-name>` - e.g. `feat/mtls`, `feat/tls-support`, `fix/validate-endpoint`, `chore/repo-housekeeping`, `test/hermetic-grpcbin-service`. Type matches the dominant commit type on the branch. Keep names short (1–3 words).
 
-**Commit messages:** `type: subject` — lowercase type, lowercase first word after the colon, ~50–60 chars, no scope, no `Co-Authored-By` trailer.
+**Commit messages:** `type: subject` - lowercase type, lowercase first word after the colon, ~50–60 chars, no scope, no `Co-Authored-By` trailer.
 
 | Type       | Use for                                             |
 | ---------- | --------------------------------------------------- |
@@ -314,9 +314,9 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 | `chore`    | release commits, dep bumps, repo hygiene            |
 | `build`    | Cargo features, overall build config                |
 
-**Bodies:** routine `feat`/`test`/`docs`/`refactor` commits stay one line. `fix` commits get a body when the root cause is non-obvious — state what was wrong, then what changed. Wrap body at ~72 chars.
+**Bodies:** routine `feat`/`test`/`docs`/`refactor` commits stay one line. `fix` commits get a body when the root cause is non-obvious - state what was wrong, then what changed. Wrap body at ~72 chars.
 
-**PR shape:** every branch lands via merge commit (`Merge pull request #N from <user>/<branch>`) — no squash. Inside the PR, prefer a series of small atomic commits over one big one: introduce a unit and its first test together, then layer follow-up `test:` commits on top (`feat: add channel_cache module with first lookup test` → `test: second lookup same endpoint is a cache hit` → `refactor: route grpc_call through channel_cache`).
+**PR shape:** every branch lands via merge commit (`Merge pull request #N from <user>/<branch>`) - no squash. Inside the PR, prefer a series of small atomic commits over one big one: introduce a unit and its first test together, then layer follow-up `test:` commits on top (`feat: add channel_cache module with first lookup test` → `test: second lookup same endpoint is a cache hit` → `refactor: route grpc_call through channel_cache`).
 
 **Releases:** `chore: Release pg_grpc version X.Y.Z`, produced by `cargo release` (see Release section).
 
@@ -326,17 +326,17 @@ Tests share a single backend process, so the `PROTO_REGISTRY` and `PENDING_FILES
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cargo pgrx init` fails                           | Run inside Docker, not host                                                                                                                       |
 | Extension not found                               | `cargo pgrx install --release` or restart `pgrx run`                                                                                              |
-| Async/threading panic                             | Use `new_current_thread()` — never multi-thread                                                                                                   |
-| `Proto error: service not found`                  | Server lacks reflection AND nothing is staged — use `grpc_proto_stage` + `grpc_proto_compile`                                                     |
+| Async/threading panic                             | Use `new_current_thread()` - never multi-thread                                                                                                   |
+| `Proto error: service not found`                  | Server lacks reflection AND nothing is staged - use `grpc_proto_stage` + `grpc_proto_compile`                                                     |
 | Connection refused                                | Endpoint is `host:port`, no `http://` prefix                                                                                                      |
 | Cache stale                                       | Reconnect to get a fresh backend process (staging + registry are per-process)                                                                     |
-| `grpc_proto_compile` fails                        | Bad file is still staged — `grpc_proto_unstage('bad.proto')` or re-stage with fixed source, then compile again. Registry is untouched by failure. |
+| `grpc_proto_compile` fails                        | Bad file is still staged - `grpc_proto_unstage('bad.proto')` or re-stage with fixed source, then compile again. Registry is untouched by failure. |
 | Version mismatch between protox and prost-reflect | protox 0.9 needs prost-types 0.14 / prost-reflect 0.16; older protox lines pair with older prost. Don't mix.                                      |
 
 ## Current Limitations
 
-- **Unary RPCs only** — streaming methods not supported
-- **Multi-file proto imports must use filenames that match staging keys** — `import "common.proto";` only resolves if someone ran `grpc_proto_stage('common.proto', ...)`
+- **Unary RPCs only** - streaming methods not supported
+- **Multi-file proto imports must use filenames that match staging keys** - `import "common.proto";` only resolves if someone ran `grpc_proto_stage('common.proto', ...)`
 
 ## API Summary
 

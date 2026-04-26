@@ -5,13 +5,7 @@ sidebar_position: 2
 
 # User-supplied protos
 
-When your gRPC server doesn't expose [reflection](https://grpc.io/docs/guides/reflection/), or when you want a **pinned, deterministic schema**, supply the `.proto` source directly.
-
-## When to use this
-
-- The server has reflection disabled (most production deployments).
-- You want a hermetic schema that doesn't drift with whatever the server happens to expose.
-- You want compile-time errors at `grpc_proto_compile()` rather than runtime errors on the first `grpc_call`.
+When your gRPC server doesn't expose [reflection](https://grpc.io/docs/guides/reflection/) or when you want a pinned, deterministic schema, supply the `.proto` source directly.
 
 ## Lifecycle
 
@@ -70,13 +64,13 @@ If the import name doesn't match a staged file, `grpc_proto_compile()` raises a 
 
 ## Well-known types
 
-Google's well-known types — `Timestamp`, `Duration`, `Any`, `StringValue`, etc. — are bundled. You can `import "google/protobuf/timestamp.proto";` and they resolve without staging anything extra.
+Google's well-known types - `Timestamp`, `Duration`, `Any`, `StringValue`, etc. - are bundled. You can `import "google/protobuf/timestamp.proto";` and they resolve without staging anything extra.
 
 After compile, the resulting descriptor pool is also **seeded** with WKT descriptors. This is what makes `Any` payloads work: an `Any` whose `type_url` points at, say, `type.googleapis.com/google.protobuf.StringValue` can be encoded and decoded even when your own `.proto` only imports `any.proto`.
 
-:::info User-staged files take priority
+:::info[User-staged files take priority]
 
-If you stage a file under a name that collides with a bundled WKT (for example, you stage your own `google/protobuf/timestamp.proto` with a custom field), your version wins. The seeding step never overwrites a name that's already in the pool.
+If you stage a file under a name that collides with a bundled WKT (for example, you stage your own `google/protobuf/timestamp.proto` with a custom field) your version wins. The seeding step never overwrites a name that's already in the pool.
 
 :::
 
@@ -99,21 +93,12 @@ Common compile errors and what they mean:
 | `parse error`                               | Syntax error in the `.proto` body.                   |
 | `field number ... already used`             | Duplicate field tag inside a message.                |
 
-## Per-process state
-
-Both `PENDING_FILES` (staging) and `PROTO_REGISTRY` (compiled) are **per-Postgres-backend** statics. Reconnecting starts fresh:
-
-- A new `psql` session sees no staged files and no registered services.
-- Connection-pooler churn (PgBouncer transaction mode, etc.) hands you a different backend per request.
-- Workflows that rely on staged protos must re-stage and re-compile per backend, or fall back to reflection.
-
-For services your application calls heavily, run the stage + compile sequence inside your connection-pool warm-up hook so each backend is ready before its first `grpc_call`.
 
 ## Function reference
 
 ### `grpc_proto_stage(filename text, source text)`
 
-Stages one `.proto` file's source under the given filename. Re-staging the same filename **overwrites** the previous source — re-stage is the way to fix a bad file.
+Stages one `.proto` file's source under the given filename. Re-staging the same filename **overwrites** the previous source - re-stage is the way to fix a bad file.
 
 ```sql
 SELECT grpc_proto_stage('auth.proto', $$ syntax = "proto3"; ... $$);
@@ -121,7 +106,7 @@ SELECT grpc_proto_stage('auth.proto', $$ syntax = "proto3"; ... $$);
 
 ### `grpc_proto_unstage(filename text) returns boolean`
 
-Removes one staged file. Returns `true` if the file was present, `false` otherwise. Does **not** touch the registry — already-compiled services keep working.
+Removes one staged file. Returns `true` if the file was present, `false` otherwise. Does **not** touch the registry - already-compiled services keep working.
 
 ```sql
 SELECT grpc_proto_unstage('auth.proto');
@@ -168,7 +153,7 @@ Returns one row per staged file. Useful for confirming what's queued before a co
 SELECT filename FROM grpc_proto_list_staged();
 ```
 
-### `grpc_proto_list_registered() returns table(service_name text, origin text, filename text, source text, endpoint text)`
+### `grpc_proto_list_registered() returns table(service_name text origin text, filename text, source text, endpoint text)`
 
 Returns one row per registered service. `origin` is either `'user'` (registered via stage+compile) or `'reflection'` (auto-registered on a `grpc_call` cache miss). The remaining columns describe the source:
 
@@ -176,7 +161,7 @@ Returns one row per registered service. `origin` is either `'user'` (registered 
 - For `'reflection'`: `endpoint` of the gRPC server the schema was fetched from. `filename` and `source` are `NULL`.
 
 ```sql
-SELECT service_name, origin, COALESCE(filename, endpoint) AS where_from
+SELECT service_name origin, COALESCE(filename, endpoint) AS where_from
 FROM grpc_proto_list_registered()
 ORDER BY service_name;
 ```

@@ -2,7 +2,7 @@
 
 # pg_grpc
 
-**Make gRPC calls directly from PostgreSQL SQL.**
+**Make gRPC calls directly from PostgreSQL**
 
 [![Test](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml/badge.svg)](https://github.com/CSenshi/pg_grpc/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/CSenshi/pg_grpc?logo=github)](https://github.com/CSenshi/pg_grpc/releases/latest)
@@ -39,7 +39,7 @@ SELECT grpc_call(
 
 ## Documentation
 
-📚 **[csenshi.github.io/pg_grpc](https://csenshi.github.io/pg_grpc)** — installation, TLS, user-supplied protos, recipes, full reference.
+📚 **[csenshi.github.io/pg_grpc](https://csenshi.github.io/pg_grpc)** - installation, TLS, user-supplied protos, recipes, full reference.
 
 ## License
 

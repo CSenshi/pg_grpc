@@ -4,7 +4,7 @@
  */
 
 :root {
-  /* shared palette — also referenced from Hero.module.css */
+  /* shared palette - also referenced from Hero.module.css */
   --pg-bg:        oklch(0.18 0.035 250);
   --pg-bg-2:      oklch(0.22 0.04  250);
   --pg-line:      oklch(0.32 0.035 250);
@@ -54,7 +54,7 @@
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.01em;
-  /* split "pg_" cyan / "grpc" orange — 3 of 7 monospace chars ≈ 43% */
+  /* split "pg_" cyan / "grpc" orange - 3 of 7 monospace chars ≈ 43% */
   background: linear-gradient(90deg, var(--pg-pg) 0%, var(--pg-pg) 43%, var(--pg-grpc) 43%, var(--pg-grpc) 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -90,7 +90,7 @@
   margin-right: 6px;
 }
 
-/* GitHub button — pill with icon */
+/* GitHub button - pill with icon */
 .gh-btn {
   display: inline-flex; align-items: center; gap: 8px;
   font-family: var(--pg-sans);

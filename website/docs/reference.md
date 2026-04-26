@@ -23,7 +23,7 @@ grpc_call(
 
 | Parameter  | Required | Description                                                                                  |
 | ---------- | -------- | -------------------------------------------------------------------------------------------- |
-| `endpoint` | yes      | `host:port`. Never include a scheme — the scheme is chosen by `options.tls`.                 |
+| `endpoint` | yes      | `host:port`. Never include a scheme - the scheme is chosen by `options.tls`.                 |
 | `method`   | yes      | Fully-qualified `pkg.Service/Method`.                                                        |
 | `request`  | yes      | JSON request body. Encoded against the input message descriptor.                             |
 | `metadata` | no       | gRPC headers (see below). `NULL` is no headers.                                              |
@@ -38,7 +38,7 @@ Strict-parsed JSONB object. Unknown keys raise `Connection error` listing the ac
 | Key                              | Type    | Validation       | Default                       |
 | -------------------------------- | ------- | ---------------- | ----------------------------- |
 | `timeout_ms`                     | integer | `>= 1`           | `30000`                       |
-| `use_reflection`                 | boolean | —                | `true`                        |
+| `use_reflection`                 | boolean | -                | `true`                        |
 | `tls`                            | object  | see below        | `NULL` → plaintext            |
 | `max_decode_message_size_bytes`  | integer | `[1, 4294967295]`| tonic default (4 MiB)         |
 | `max_encode_message_size_bytes`  | integer | `[1, 4294967295]`| tonic default (unbounded)     |
@@ -99,7 +99,7 @@ Drops every registered service. Staging untouched.
 
 One row per currently-staged file.
 
-### `grpc_proto_list_registered() returns table(service_name text, origin text, filename text, source text, endpoint text)`
+### `grpc_proto_list_registered() returns table(service_name text origin text, filename text, source text, endpoint text)`
 
 One row per registered service. `origin` is `'user'` (registered via stage+compile) or `'reflection'` (auto-registered on a `grpc_call` cache miss).
 
@@ -109,8 +109,8 @@ Every failure raises a Postgres `ERROR` with a stable prefix. Match on the prefi
 
 | Prefix                   | Cause                                                                       |
 | ------------------------ | --------------------------------------------------------------------------- |
-| `Connection error: …`    | Could not reach the endpoint, or invalid `options` / `tls` config.          |
-| `Proto error: …`         | Reflection failed, symbol not found, or JSON ↔ protobuf encode/decode error.|
+| `Connection error: …`    | Could not reach the endpoint or invalid `options` / `tls` config.          |
+| `Proto error: …`         | Reflection failed, symbol not found or JSON ↔ protobuf encode/decode error.|
 | `Proto compile error: …` | `grpc_proto_compile` failed to parse or resolve staged files.               |
 | `gRPC call failed: …`    | Server returned a non-OK gRPC status.                                       |
 | `Request timeout: …ms`   | The call (connect + reflection + unary) did not finish within `timeout_ms`. |

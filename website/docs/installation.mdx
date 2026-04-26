@@ -3,16 +3,12 @@ title: Installation
 sidebar_position: 2
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Installation
 
-Three supported paths, ordered universal → fastest → containerized.
-
-## Prerequisites
-
-- PostgreSQL **13–18** with server development headers
-- The right path for your platform (below)
-
-## Path A — From source with cargo-pgrx
+## Path A - From source with cargo-pgrx
 
 Universal: works on macOS, any Linux, anywhere Rust and Postgres dev headers exist. Currently the **only** path on macOS.
 
@@ -37,7 +33,7 @@ Then in `psql`:
 CREATE EXTENSION pg_grpc;
 ```
 
-## Path B — Pre-built `.deb` from GitHub releases
+## Path B - Pre-built `.deb`
 
 Linux Debian-family (Ubuntu, Debian, WSL2). Each release publishes 12 `.deb` packages: Postgres 13–18 × amd64 / arm64.
 
@@ -58,9 +54,20 @@ CREATE EXTENSION pg_grpc;
 
 Browse all release assets at [github.com/CSenshi/pg_grpc/releases](https://github.com/CSenshi/pg_grpc/releases).
 
-## Path C — Docker
+## Path C - Docker
 
-Wrap path B on top of the official Postgres image. Drop this `Dockerfile` next to your `docker-compose.yml`:
+Wrap path B on top of the official Postgres image. Three files sit side by side in your project:
+
+```text
+.
+├── Dockerfile
+├── docker-compose.yml
+└── docker-initdb/
+    └── 01-pg_grpc.sql
+```
+
+<Tabs groupId="docker-files">
+  <TabItem value="dockerfile" label="Dockerfile" default>
 
 ```dockerfile
 FROM postgres:18-bookworm
@@ -77,16 +84,10 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 ```
 
-To auto-create the extension on first start, add an init script:
+  </TabItem>
+  <TabItem value="compose" label="docker-compose.yml">
 
-```bash
-mkdir -p docker-initdb
-cat > docker-initdb/01-pg_grpc.sql <<'SQL'
-CREATE EXTENSION IF NOT EXISTS pg_grpc;
-SQL
-```
-
-```yaml title="docker-compose.yml"
+```yaml
 services:
   postgres:
     build: .
@@ -97,6 +98,18 @@ services:
     ports:
       - "5432:5432"
 ```
+
+  </TabItem>
+  <TabItem value="initdb" label="docker-initdb/01-pg_grpc.sql">
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_grpc;
+```
+
+  </TabItem>
+</Tabs>
+
+Then `docker compose up --build`. The init script runs once on a fresh data volume to auto-create the extension.
 
 ## Verify install
 
@@ -115,11 +128,11 @@ SELECT grpc_call(
 );
 ```
 
-The second call exercises the channel cache, reflection fetch, JSON ↔ proto codec, and TLS handshake against the OS trust store. If it returns a JSON object containing `"f_string": "hello"`, you're done.
+The second call exercises the channel cache, reflection fetch, JSON ↔ proto codec and TLS handshake against the OS trust store. If it returns a JSON object containing `"f_string": "hello"`, you're done.
 
 ## Roadmap
 
-These are not shipped yet — track in [issues](https://github.com/CSenshi/pg_grpc/issues):
+These are not shipped yet - track in [issues](https://github.com/CSenshi/pg_grpc/issues):
 
-- **Homebrew tap** — macOS users currently only have path A.
+- **Homebrew tap** - macOS users currently only have path A.
 - **Pre-built `.so`** for non-Debian Linux (Alpine, RHEL, Arch).

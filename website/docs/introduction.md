@@ -3,16 +3,6 @@ title: Introduction
 sidebar_position: 1
 ---
 
-# pg_grpc
-
-**Make gRPC calls directly from PostgreSQL SQL.**
-
-No codegen. No middleware. No app-layer glue.
-
-`pg_grpc` turns any gRPC service into a first-class SQL function call. Invoke RPCs from triggers, materialized views, scheduled jobs, or ad-hoc queries.
-
-![pg_grpc demo](/img/demo.gif)
-
 ## How it looks
 
 Define your service in a `.proto`:
@@ -70,9 +60,9 @@ The proto registry is the cache. Reflection only fires on a miss; once a service
 
 ## Won't do (yet)
 
-- **Streaming RPCs** — only unary methods are supported.
-- **Pre-built binaries** — `cargo pgrx install --release` is the cross-platform path; Linux Debian-family users have a `.deb` from each release.
-- **Cross-backend cache sharing** — every Postgres backend keeps its own channel cache, staged files, and registered services. Reconnecting resets them.
+- **Streaming RPCs** - only unary methods are supported.
+- **Pre-built binaries** - `cargo pgrx install --release` is the cross-platform path; Linux Debian-family users have a `.deb` from each release.
+- **Cross-backend cache sharing** - every Postgres backend keeps its own channel cache, staged files and registered services. Reconnecting resets them.
 
 ## Next
 

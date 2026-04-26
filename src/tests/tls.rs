@@ -138,7 +138,7 @@ fn test_tls_config_empty_ne_with_ca_cert() {
 }
 
 // Cache-key distinctness at the (endpoint, Option<TlsConfig>) level. Exercises
-// the Hash/Eq contract directly rather than forcing real TLS handshakes —
+// the Hash/Eq contract directly rather than forcing real TLS handshakes -
 // different TLS configs must be different keys regardless of endpoint.
 #[pg_test]
 fn test_cache_key_same_endpoint_same_tls_eq() {
@@ -219,7 +219,7 @@ fn test_build_client_tls_config_full_mtls_sni() {
 
 // End-to-end: real TLS handshake + reflection + unary call against grpcb.in:9001
 // using the system trust store. Matches how the existing plaintext tests hit
-// grpcb.in:9000 — relies on outbound network, same as the rest of the suite.
+// grpcb.in:9000 - relies on outbound network, same as the rest of the suite.
 #[pg_test]
 fn test_grpc_call_tls_reflection_e2e() {
     crate::grpc_proto_unregister_all();

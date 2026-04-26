@@ -13,7 +13,6 @@ const sidebars: SidebarsConfig = {
         'guides/tls-and-mtls',
         'guides/user-supplied-protos',
         'guides/large-messages',
-        'guides/recipes',
       ],
     },
     'reference',

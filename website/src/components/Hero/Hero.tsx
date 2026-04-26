@@ -39,7 +39,7 @@ export default function Hero(): JSX.Element {
           <span className={styles.eyebrow}>
             <b>postgres extension</b>
             <span className={styles.sep}>·</span>
-            Postgres 13 — 18
+            Postgres 13+
             <span className={styles.sep}>·</span>
             v{version}
           </span>
@@ -47,12 +47,12 @@ export default function Hero(): JSX.Element {
           <h1 className={styles.headline}>
             Call <span className={styles.grpcWord}>gRPC</span> services
             <br />
-            directly from <em>SQL</em>.
+            directly from <em>SQL</em>
           </h1>
 
           <p className={styles.lede}>
             <code>pg_grpc</code> is a PostgreSQL extension that lets you invoke
-            unary gRPC methods from inside a SQL query — no sidecar, no codegen,
+            unary gRPC methods from inside a SQL query - no sidecar, no codegen,
             no application layer in the middle.
           </p>
 
@@ -86,7 +86,7 @@ export default function Hero(): JSX.Element {
               <span />
             </div>
             <div className={styles.termTitle}>
-              psql — <span className={styles.pgConn}>postgres@db</span>:5432
+              psql - <span className={styles.pgConn}>postgres@db</span>:5432
             </div>
           </div>
 

@@ -36,7 +36,7 @@ tonic             = { version = "0.14", default-features = false, features = ["c
 tonic-reflection  = { version = "0.14", default-features = false }
 
 # Exposed so we can install the `ring` crypto provider exactly once at
-# _PG_init — the first TLS handshake would otherwise pick lazily and panic
+# _PG_init - the first TLS handshake would otherwise pick lazily and panic
 # if multiple providers are compiled in.
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
@@ -46,7 +46,7 @@ prost-types   = "0.14"
 prost-reflect = { version = "0.16", features = ["serde"] }
 serde         = "1"
 
-# Async runtime (one per SQL call — never stored globally)
+# Async runtime (one per SQL call - never stored globally)
 tokio = { version = "1", features = ["rt", "net", "time"] }
 
 # Error handling
