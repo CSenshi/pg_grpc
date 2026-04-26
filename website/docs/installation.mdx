@@ -1,0 +1,138 @@
+---
+title: Installation
+sidebar_position: 2
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Installation
+
+## Path A - From source with cargo-pgrx
+
+Universal: works on macOS, any Linux, anywhere Rust and Postgres dev headers exist. Currently the **only** path on macOS.
+
+```bash
+# 1. Rust toolchain (skip if already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 2. cargo-pgrx (matches the version pg_grpc pins to in Cargo.toml)
+cargo install --locked cargo-pgrx --version 0.18.0
+
+# 3. Clone and build into your system Postgres
+git clone https://github.com/CSenshi/pg_grpc
+cd pg_grpc
+cargo pgrx install --release --no-default-features --features pg18
+```
+
+Replace `pg18` with `pg13` … `pg17` as needed. `cargo pgrx install` writes the extension into your system Postgres' `$libdir` and `$sharedir/extension`.
+
+Then in `psql`:
+
+```sql
+CREATE EXTENSION pg_grpc;
+```
+
+## Path B - Pre-built `.deb`
+
+Linux Debian-family (Ubuntu, Debian, WSL2). Each release publishes 12 `.deb` packages: Postgres 13–18 × amd64 / arm64.
+
+```bash
+VERSION=0.4.0
+PG=18
+ARCH=amd64    # or arm64
+
+wget https://github.com/CSenshi/pg_grpc/releases/download/v${VERSION}/pg_grpc-v${VERSION}-pg${PG}-${ARCH}-linux-gnu.deb
+sudo dpkg -i pg_grpc-v${VERSION}-pg${PG}-${ARCH}-linux-gnu.deb
+```
+
+Then in `psql`:
+
+```sql
+CREATE EXTENSION pg_grpc;
+```
+
+Browse all release assets at [github.com/CSenshi/pg_grpc/releases](https://github.com/CSenshi/pg_grpc/releases).
+
+## Path C - Docker
+
+Wrap path B on top of the official Postgres image. Three files sit side by side in your project:
+
+```text
+.
+├── Dockerfile
+├── docker-compose.yml
+└── docker-initdb/
+    └── 01-pg_grpc.sql
+```
+
+<Tabs groupId="docker-files">
+  <TabItem value="dockerfile" label="Dockerfile" default>
+
+```dockerfile
+FROM postgres:18-bookworm
+
+ARG PG_GRPC_VERSION=0.4.0
+ARG TARGETARCH=amd64
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates wget \
+ && wget -O /tmp/pg_grpc.deb \
+      https://github.com/CSenshi/pg_grpc/releases/download/v${PG_GRPC_VERSION}/pg_grpc-v${PG_GRPC_VERSION}-pg18-${TARGETARCH}-linux-gnu.deb \
+ && dpkg -i /tmp/pg_grpc.deb \
+ && rm /tmp/pg_grpc.deb \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+  </TabItem>
+  <TabItem value="compose" label="docker-compose.yml">
+
+```yaml
+services:
+  postgres:
+    build: .
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./docker-initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+```
+
+  </TabItem>
+  <TabItem value="initdb" label="docker-initdb/01-pg_grpc.sql">
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_grpc;
+```
+
+  </TabItem>
+</Tabs>
+
+Then `docker compose up --build`. The init script runs once on a fresh data volume to auto-create the extension.
+
+## Verify install
+
+After `CREATE EXTENSION pg_grpc;`, confirm both the extension **and** the TLS code path with a public smoke test against `grpcb.in`:
+
+```sql
+-- Extension is loaded:
+SELECT extname, extversion FROM pg_extension WHERE extname = 'pg_grpc';
+
+-- gRPC + TLS round-trip works:
+SELECT grpc_call(
+  'grpcb.in:9001',
+  'grpcbin.GRPCBin/DummyUnary',
+  '{"f_string": "hello"}'::jsonb,
+  options => '{"tls": {}}'::jsonb
+);
+```
+
+The second call exercises the channel cache, reflection fetch, JSON ↔ proto codec and TLS handshake against the OS trust store. If it returns a JSON object containing `"f_string": "hello"`, you're done.
+
+## Roadmap
+
+These are not shipped yet - track in [issues](https://github.com/CSenshi/pg_grpc/issues):
+
+- **Homebrew tap** - macOS users currently only have path A.
+- **Pre-built `.so`** for non-Debian Linux (Alpine, RHEL, Arch).

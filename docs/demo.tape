@@ -1,4 +1,4 @@
-# Record with:  vhs docs/demo.tape -o docs/demo.gif
+# Record with:  vhs docs/demo.tape -o website/static/img/demo.gif
 # Prereqs (run once):
 #   cargo pgrx install --release
 #   cargo pgrx start pg18

@@ -1,0 +1,131 @@
+/**
+ * Global styles. Includes a custom navbar styled to match the
+ * pg_grpc landing-page topbar design (dark, blurred, branded).
+ */
+
+:root {
+  /* shared palette - also referenced from Hero.module.css */
+  --pg-bg:        oklch(0.18 0.035 250);
+  --pg-bg-2:      oklch(0.22 0.04  250);
+  --pg-line:      oklch(0.32 0.035 250);
+  --pg-line-soft: oklch(0.28 0.03  250 / 0.6);
+  --pg-ink:       oklch(0.97 0.01  250);
+  --pg-ink-2:     oklch(0.82 0.015 250);
+  --pg-ink-3:     oklch(0.66 0.02  250);
+  --pg-ink-4:     oklch(0.50 0.02  250);
+  --pg-pg:        oklch(0.78 0.13 215);
+  --pg-grpc:      oklch(0.80 0.13 60);
+  --pg-good:      oklch(0.80 0.15 150);
+  --pg-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --pg-sans: "Inter", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+
+  --ifm-color-primary:         oklch(0.78 0.13 215);
+  --ifm-color-primary-dark:    oklch(0.72 0.13 215);
+  --ifm-color-primary-darker:  oklch(0.68 0.13 215);
+  --ifm-color-primary-darkest: oklch(0.62 0.13 215);
+  --ifm-color-primary-light:   oklch(0.83 0.12 215);
+  --ifm-color-primary-lighter: oklch(0.86 0.10 215);
+  --ifm-color-primary-lightest:oklch(0.90 0.08 215);
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* ─────────────────────────── Navbar (matches design topbar) ─────────────────────────── */
+
+.navbar {
+  background: oklch(0.18 0.035 250 / 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--pg-line-soft);
+  box-shadow: none;
+  font-family: var(--pg-sans);
+}
+.navbar__inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 32px;
+  gap: 12px;
+}
+.navbar__brand { gap: 10px; margin-right: 18px; }
+.navbar__logo { height: 26px; width: 26px; margin-right: 0; }
+.navbar__logo img { height: 26px; width: 26px; display: block; }
+.navbar__title {
+  font-family: var(--pg-mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  /* split "pg_" cyan / "grpc" orange - 3 of 7 monospace chars ≈ 43% */
+  background: linear-gradient(90deg, var(--pg-pg) 0%, var(--pg-pg) 43%, var(--pg-grpc) 43%, var(--pg-grpc) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.navbar__items { gap: 22px; }
+.navbar__items--right { gap: 14px; }
+.navbar__items--right > .navbar__item:not(:last-child) { padding: 0; }
+.navbar__link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pg-ink-2);
+  padding: 0;
+}
+.navbar__link:hover,
+.navbar__link--active { color: var(--pg-ink); }
+.navbar__link--active { background: transparent; }
+
+/* alpha status pill */
+.alpha-pill {
+  display: inline-flex; align-items: center;
+  font-family: var(--pg-mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid var(--pg-line);
+  border-radius: 999px;
+  color: var(--pg-ink-3);
+  white-space: nowrap;
+}
+.alpha-pill .alpha-dot {
+  display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--pg-good);
+  margin-right: 6px;
+}
+
+/* GitHub button - pill with icon */
+.gh-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--pg-sans);
+  font-size: 13px; font-weight: 500;
+  padding: 7px 12px;
+  border: 1px solid var(--pg-line);
+  border-radius: 6px;
+  color: var(--pg-ink);
+  text-decoration: none;
+  transition: background 120ms ease;
+}
+.gh-btn:hover { background: var(--pg-bg-2); color: var(--pg-ink); text-decoration: none; }
+
+/* hide default Docusaurus chrome that isn't in the design */
+.navbar__search,
+.navbar .DocSearch,
+[class*="searchBox_"],
+[class*="searchBar_"],
+[class*="colorModeToggle_"] { display: none !important; }
+
+/* mobile sidebar trigger keeps the dark style */
+.navbar__toggle { color: var(--pg-ink-2); }
+
+/* The .navbar above uses backdrop-filter, which makes it the containing
+   block for position:fixed descendants. Docusaurus renders the mobile
+   sidebar inside the navbar with top:0/bottom:0 and no explicit height,
+   so it collapses to navbar height. Pin it to the viewport instead. */
+.navbar-sidebar,
+.navbar-sidebar__backdrop {
+  height: 100dvh;
+}
+
+/* ────── force dark surface for the rest of Docusaurus chrome ────── */
+
+html, body {
+  background: var(--pg-bg);
+}
+.main-wrapper { background: var(--pg-bg); }
