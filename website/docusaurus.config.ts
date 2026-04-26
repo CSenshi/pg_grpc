@@ -1,6 +1,14 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+
+const cargoToml = fs.readFileSync(
+  path.resolve(__dirname, '../Cargo.toml'),
+  'utf8',
+);
+const version = cargoToml.match(/^version\s*=\s*"([^"]+)"/m)![1];
 
 const config: Config = {
   title: 'pg_grpc',
@@ -19,6 +27,8 @@ const config: Config = {
   trailingSlash: false,
 
   onBrokenLinks: 'throw',
+
+  customFields: {version},
 
   i18n: {
     defaultLocale: 'en',
@@ -85,8 +95,7 @@ const config: Config = {
         {
           type: 'html',
           position: 'right',
-          value:
-            '<span class="alpha-pill"><span class="alpha-dot"></span>v0.3 · alpha</span>',
+          value: `<span class="alpha-pill"><span class="alpha-dot"></span>v${version} · alpha</span>`,
         },
         {
           type: 'html',

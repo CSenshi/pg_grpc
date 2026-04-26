@@ -1,5 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import Link from '@docusaurus/Link';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './Hero.module.css';
 
 type TabKey = 't1' | 't2';
@@ -10,6 +11,8 @@ const TABS: {key: TabKey; label: string}[] = [
 ];
 
 export default function Hero(): JSX.Element {
+  const {siteConfig} = useDocusaurusContext();
+  const version = siteConfig.customFields?.version as string;
   const [tab, setTab] = useState<TabKey>('t1');
   const userInteractedRef = useRef(false);
 
@@ -38,7 +41,7 @@ export default function Hero(): JSX.Element {
             <span className={styles.sep}>·</span>
             Postgres 13 — 18
             <span className={styles.sep}>·</span>
-            v0.3.0
+            v{version}
           </span>
 
           <h1 className={styles.headline}>
