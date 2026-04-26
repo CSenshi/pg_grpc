@@ -13,7 +13,7 @@ const version = cargoToml.match(/^version\s*=\s*"([^"]+)"/m)![1];
 const config: Config = {
   title: 'pg_grpc',
   tagline: 'Make gRPC calls directly from PostgreSQL',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   future: {
     v4: true,

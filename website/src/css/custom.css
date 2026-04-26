@@ -114,6 +114,15 @@
 /* mobile sidebar trigger keeps the dark style */
 .navbar__toggle { color: var(--pg-ink-2); }
 
+/* The .navbar above uses backdrop-filter, which makes it the containing
+   block for position:fixed descendants. Docusaurus renders the mobile
+   sidebar inside the navbar with top:0/bottom:0 and no explicit height,
+   so it collapses to navbar height. Pin it to the viewport instead. */
+.navbar-sidebar,
+.navbar-sidebar__backdrop {
+  height: 100dvh;
+}
+
 /* ────── force dark surface for the rest of Docusaurus chrome ────── */
 
 html, body {
