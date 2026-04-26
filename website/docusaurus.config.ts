@@ -33,6 +33,10 @@ const config: Config = {
   },
   themes: ['@docusaurus/theme-mermaid'],
 
+  stylesheets: [
+    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
+  ],
+
   presets: [
     [
       'classic',
@@ -63,21 +67,34 @@ const config: Config = {
 
   themeConfig: {
     colorMode: {
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      disableSwitch: true,
+      respectPrefersColorScheme: false,
     },
     navbar: {
       title: 'pg_grpc',
+      logo: {
+        alt: '',
+        src: 'img/logo.svg',
+      },
       items: [
+        {to: '/introduction', label: 'Docs', position: 'left'},
+        {to: '/quickstart', label: 'Quickstart', position: 'left'},
+        {to: '/reference', label: 'API', position: 'left'},
+        {to: '/guides/recipes', label: 'Examples', position: 'left'},
         {
-          href: 'https://github.com/CSenshi/pg_grpc',
-          label: 'GitHub',
+          type: 'html',
           position: 'right',
+          value:
+            '<span class="alpha-pill"><span class="alpha-dot"></span>v0.3 · alpha</span>',
+        },
+        {
+          type: 'html',
+          position: 'right',
+          value:
+            '<a class="gh-btn" href="https://github.com/CSenshi/pg_grpc" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.34c-2.23.49-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.27.82 2.15 0 3.07-1.87 3.74-3.65 3.94.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>GitHub</a>',
         },
       ],
-    },
-    footer: {
-      style: 'dark',
-      copyright: 'Built with Docusaurus. MIT licensed.',
     },
     prism: {
       theme: prismThemes.github,
