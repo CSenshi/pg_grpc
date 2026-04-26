@@ -68,7 +68,7 @@
   gap: 72px;
   align-items: center;
   width: 100%;
-  padding: 32px 0;
+  padding-block: 32px;
 }
 
 /* ───── left column ───── */
@@ -256,7 +256,7 @@
   .wrap { padding: 0 18px; }
 }
 @media (max-height: 760px) {
-  .heroGrid { padding: 16px 0; gap: 40px; }
+  .heroGrid { padding-block: 16px; gap: 40px; }
   .headline { font-size: clamp(32px, 3.8vw, 46px); margin: 14px 0 10px; }
   .lede { font-size: 15px; margin-bottom: 14px; }
   .pillRow { margin-bottom: 16px; }
