@@ -7,3 +7,9 @@ tests/pg_regress/results
 tests/pg_regress/regression.diffs
 tests/pg_regress/regression.out
 .scratch/
+
+# Docusaurus
+/website/node_modules
+/website/build
+/website/.docusaurus
+
