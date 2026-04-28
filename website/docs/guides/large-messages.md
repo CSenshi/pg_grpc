@@ -3,6 +3,8 @@ title: Large messages
 sidebar_position: 3
 ---
 
+> For the complete documentation index, see [llms.txt](pathname:///pg_grpc/llms.txt)
+
 # Large messages
 
 gRPC ships with a hard size cap on every message in both directions. The defaults are conservative - bump them when you know your payloads exceed them.

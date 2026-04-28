@@ -1,0 +1,521 @@
+# pg_grpc — Full Documentation
+
+> PostgreSQL extension (Postgres 13–18) for making unary gRPC calls directly from SQL. No sidecar, no codegen, no application layer. Built with Rust and pgrx. Alpha: unary RPCs only, per-backend-process cache.
+
+Source: https://csenshi.github.io/pg_grpc/
+Index: https://csenshi.github.io/pg_grpc/llms.txt
+
+---
+
+## Introduction
+
+### How it looks
+
+Define your service in a `.proto`:
+
+```protobuf
+syntax = "proto3";
+package auth;
+
+service AuthService {
+  rpc GetUser(UserId) returns (User);
+}
+
+message UserId { string id = 1; }
+message User {
+  string id = 1;
+  string email = 2;
+}
+```
+
+Call it from SQL:
+
+```sql
+SELECT grpc_call(
+  'localhost:50051',
+  'auth.AuthService/GetUser',
+  '{"id": "42"}'::jsonb
+);
+```
+
+Get JSON back:
+
+```json
+{
+  "id": "42",
+  "email": "user@example.com"
+}
+```
+
+### How it works
+
+The proto registry is the cache. Reflection only fires on a miss; once a service is resolved, every subsequent call hits the cached descriptor pool. You can also pre-load schemas with `grpc_proto_stage` to skip reflection entirely.
+
+Call pipeline:
+1. `grpc_call("host:port", "pkg.Service/Method", {...})` parses the method string
+2. TLS config is parsed from `options.tls` (if supplied)
+3. A channel is fetched or created in the channel cache (keyed by endpoint + TLS config)
+4. The proto registry is checked for the service — hit uses the cached pool; miss calls server reflection and caches the result
+5. The method descriptor is resolved from the pool
+6. The JSON request is encoded to protobuf bytes
+7. A unary gRPC call is made with `RawBytesCodec`
+8. The response bytes are decoded to a `DynamicMessage` and returned as JSONB
+
+### Current limitations
+
+- **Streaming RPCs** — only unary methods are supported
+- **Pre-built binaries** — `cargo pgrx install --release` is the cross-platform path; Linux Debian-family users have a `.deb` from each release
+- **Cross-backend cache sharing** — every Postgres backend keeps its own channel cache, staged files and registered services. Reconnecting resets them
+
+---
+
+## Installation
+
+### Path A — From source with cargo-pgrx
+
+Universal: works on macOS, any Linux, anywhere Rust and Postgres dev headers exist. Currently the **only** path on macOS.
+
+```bash
+# 1. Rust toolchain (skip if already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 2. cargo-pgrx (matches the version pg_grpc pins to in Cargo.toml)
+cargo install --locked cargo-pgrx --version 0.18.0
+
+# 3. Clone and build into your system Postgres
+git clone https://github.com/CSenshi/pg_grpc
+cd pg_grpc
+cargo pgrx install --release --no-default-features --features pg18
+```
+
+Replace `pg18` with `pg13` … `pg17` as needed.
+
+```sql
+CREATE EXTENSION pg_grpc;
+```
+
+### Path B — Pre-built `.deb`
+
+Linux Debian-family (Ubuntu, Debian, WSL2). Each release publishes 12 `.deb` packages: Postgres 13–18 × amd64 / arm64.
+
+```bash
+VERSION=0.4.0
+PG=18
+ARCH=amd64    # or arm64
+
+wget https://github.com/CSenshi/pg_grpc/releases/download/v${VERSION}/pg_grpc-v${VERSION}-pg${PG}-${ARCH}-linux-gnu.deb
+sudo dpkg -i pg_grpc-v${VERSION}-pg${PG}-${ARCH}-linux-gnu.deb
+```
+
+```sql
+CREATE EXTENSION pg_grpc;
+```
+
+### Path C — Docker
+
+```dockerfile
+FROM postgres:18-bookworm
+
+ARG PG_GRPC_VERSION=0.4.0
+ARG TARGETARCH=amd64
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates wget \
+ && wget -O /tmp/pg_grpc.deb \
+      https://github.com/CSenshi/pg_grpc/releases/download/v${PG_GRPC_VERSION}/pg_grpc-v${PG_GRPC_VERSION}-pg18-${TARGETARCH}-linux-gnu.deb \
+ && dpkg -i /tmp/pg_grpc.deb \
+ && rm /tmp/pg_grpc.deb \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+docker-compose.yml:
+
+```yaml
+services:
+  postgres:
+    build: .
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./docker-initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+```
+
+docker-initdb/01-pg_grpc.sql:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_grpc;
+```
+
+### Verify install
+
+```sql
+-- Extension is loaded:
+SELECT extname, extversion FROM pg_extension WHERE extname = 'pg_grpc';
+
+-- gRPC + TLS round-trip works:
+SELECT grpc_call(
+  'grpcb.in:9001',
+  'grpcbin.GRPCBin/DummyUnary',
+  '{"f_string": "hello"}'::jsonb,
+  options => '{"tls": {}}'::jsonb
+);
+```
+
+---
+
+## Quickstart
+
+Two paths, depending on whether your gRPC server exposes reflection.
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_grpc;
+```
+
+### Path 1 — Server exposes reflection
+
+One SQL call. Schemas are fetched from the server on first use, then cached.
+
+```sql
+SELECT grpc_call(
+  'localhost:50051',
+  'auth.AuthService/GetUser',
+  '{"id": "42"}'::jsonb
+);
+```
+
+### Path 2 — Server does not expose reflection
+
+Stage your `.proto` files, compile them, then call:
+
+```sql
+-- 1. Stage one or more .proto files
+SELECT grpc_proto_stage('common.proto', $PROTO$
+  syntax = "proto3";
+  package auth;
+
+  message UserId { string id = 1; }
+  message User {
+    string id = 1;
+    string email = 2;
+  }
+$PROTO$);
+
+SELECT grpc_proto_stage('auth.proto', $PROTO$
+  syntax = "proto3";
+  import "common.proto";
+  package auth;
+
+  service AuthService {
+    rpc GetUser(UserId) returns (User);
+  }
+$PROTO$);
+
+-- 2. Compile every staged file at once. Failure preserves staging.
+SELECT grpc_proto_compile();
+
+-- 3. Call as if reflection had been used.
+SELECT grpc_call(
+  'localhost:50051',
+  'auth.AuthService/GetUser',
+  '{"id": "42"}'::jsonb
+);
+```
+
+### Important caveat
+
+All caches (channel pool, staged files, registered services) live inside a single Postgres backend process. They do not persist across reconnects and are not shared between concurrent backends.
+
+---
+
+## Reference
+
+### `grpc_call`
+
+```sql
+grpc_call(
+  endpoint  TEXT,
+  method    TEXT,
+  request   JSONB,
+  metadata  JSONB DEFAULT NULL,
+  options   JSONB DEFAULT NULL
+) RETURNS JSONB
+```
+
+| Parameter  | Required | Description                                                                                  |
+| ---------- | -------- | -------------------------------------------------------------------------------------------- |
+| `endpoint` | yes      | `host:port`. Never include a scheme — the scheme is chosen by `options.tls`.                 |
+| `method`   | yes      | Fully-qualified `pkg.Service/Method`.                                                        |
+| `request`  | yes      | JSON request body. Encoded against the input message descriptor.                             |
+| `metadata` | no       | gRPC headers (see below). `NULL` is no headers.                                              |
+| `options`  | no       | Per-call transport / runtime config (see below). `NULL` takes all defaults.                  |
+
+Returns the decoded response message as JSONB. Any failure raises a Postgres `ERROR` and aborts the statement.
+
+#### `options` blob
+
+Strict-parsed JSONB object. Unknown keys raise `Connection error` listing the accepted set.
+
+| Key                              | Type    | Validation        | Default                       |
+| -------------------------------- | ------- | ----------------- | ----------------------------- |
+| `timeout_ms`                     | integer | `>= 1`            | `30000`                       |
+| `use_reflection`                 | boolean | —                 | `true`                        |
+| `tls`                            | object  | see below         | `NULL` → plaintext            |
+| `max_decode_message_size_bytes`  | integer | `[1, 4294967295]` | tonic default (4 MiB)         |
+| `max_encode_message_size_bytes`  | integer | `[1, 4294967295]` | tonic default (unbounded)     |
+
+`options.tls` fields:
+
+| Field         | Type   | Notes                                                                                |
+| ------------- | ------ | ------------------------------------------------------------------------------------ |
+| `ca_cert`     | string | PEM. Layered onto the OS trust store.                                                |
+| `client_cert` | string | PEM. Required together with `client_key`.                                            |
+| `client_key`  | string | PEM. Required together with `client_cert`.                                           |
+| `domain_name` | string | SNI / cert-verification override.                                                    |
+
+A bare `'{"tls": {}}'` enables TLS using the OS trust store.
+
+#### `metadata` blob
+
+JSONB object. Keys are silently lowercased. Values may be a string or an array of strings (repeated headers).
+
+```sql
+SELECT grpc_call(
+  'host:port', 'pkg.S/M', '{}'::jsonb,
+  metadata => '{"authorization": "Bearer abc", "x-trace-id": ["t1", "t2"]}'::jsonb
+);
+```
+
+Keys ending in `-bin` (binary metadata) are rejected in v1.
+
+### Proto management
+
+#### `grpc_proto_stage(filename text, source text)`
+
+Stages one `.proto` file's source under the given filename. Re-staging the same filename overwrites.
+
+#### `grpc_proto_unstage(filename text) returns boolean`
+
+Removes one staged file. Returns `true` if it was present.
+
+#### `grpc_proto_unstage_all()`
+
+Clears every staged file. Registry untouched.
+
+#### `grpc_proto_compile()`
+
+Compiles every staged file together. On success, every service is inserted into the registry and staging is cleared. On failure, both areas are left as they were.
+
+#### `grpc_proto_unregister(service_name text) returns boolean`
+
+Removes one fully-qualified service from the registry. Returns `true` if it was present.
+
+#### `grpc_proto_unregister_all()`
+
+Drops every registered service. Staging untouched.
+
+#### `grpc_proto_list_staged() returns table(filename text, source text)`
+
+One row per currently-staged file.
+
+#### `grpc_proto_list_registered() returns table(service_name text, origin text, filename text, source text, endpoint text)`
+
+One row per registered service. `origin` is `'user'` or `'reflection'`.
+
+### Errors
+
+| Prefix                   | Cause                                                                       |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `Connection error: …`    | Could not reach the endpoint or invalid `options` / `tls` config.          |
+| `Proto error: …`         | Reflection failed, symbol not found or JSON ↔ protobuf encode/decode error.|
+| `Proto compile error: …` | `grpc_proto_compile` failed to parse or resolve staged files.               |
+| `gRPC call failed: …`    | Server returned a non-OK gRPC status.                                       |
+| `Request timeout: …ms`   | The call did not finish within `timeout_ms`.                                |
+
+---
+
+## Guide: TLS & mTLS
+
+Connection security lives inside the `options.tls` JSONB sub-object.
+
+| `options.tls`                | Wire protocol                |
+| ---------------------------- | ---------------------------- |
+| omitted or `options` absent  | **HTTP/2 plaintext** (h2c)   |
+| `'{}'::jsonb` (empty object) | **HTTPS** (OS trust store)   |
+| `'{...}'::jsonb` (populated) | **HTTPS** (with CA / mTLS)   |
+
+### Plaintext (default)
+
+```sql
+SELECT grpc_call('localhost:50051', 'pkg.S/M', '{}'::jsonb);
+```
+
+### TLS with the OS trust store
+
+```sql
+SELECT grpc_call(
+  'grpcb.in:9001',
+  'grpcbin.GRPCBin/DummyUnary',
+  '{"f_string": "hello"}'::jsonb,
+  options => '{"tls": {}}'::jsonb
+);
+```
+
+### TLS with a private CA
+
+```sql
+SELECT grpc_call(
+  'internal.example.com:443',
+  'pkg.Service/Method',
+  '{"foo": "bar"}'::jsonb,
+  options => jsonb_build_object(
+    'tls', jsonb_build_object(
+      'ca_cert', pg_read_file('/etc/ssl/certs/internal-root.pem')
+    )
+  )
+);
+```
+
+### mTLS (mutual TLS)
+
+```sql
+SELECT grpc_call(
+  '10.0.0.7:8443',
+  'pkg.Service/Method',
+  '{"foo": "bar"}'::jsonb,
+  options => jsonb_build_object(
+    'tls', jsonb_build_object(
+      'ca_cert',     pg_read_file('/etc/ssl/certs/internal-root.pem'),
+      'client_cert', pg_read_file('/etc/ssl/certs/client.pem'),
+      'client_key',  pg_read_file('/etc/ssl/private/client.key'),
+      'domain_name', 'internal.example.com'
+    )
+  )
+);
+```
+
+`client_cert` and `client_key` must be set together.
+
+### SNI / domain-name override
+
+```sql
+SELECT grpc_call(
+  '10.0.0.7:8443',
+  'pkg.Service/Method',
+  '{}'::jsonb,
+  options => '{"tls": {"domain_name": "internal.example.com"}}'::jsonb
+);
+```
+
+### TLS field reference
+
+| Field         | Type   | Required             | Description                                                         |
+| ------------- | ------ | -------------------- | ------------------------------------------------------------------- |
+| `ca_cert`     | string | no                   | PEM-encoded root CA. Layered on top of the OS trust store.          |
+| `client_cert` | string | with `client_key`    | PEM-encoded client certificate.                                     |
+| `client_key`  | string | with `client_cert`   | PEM-encoded client private key.                                     |
+| `domain_name` | string | no                   | Override the SNI / cert-verification name. Useful for IP endpoints. |
+
+---
+
+## Guide: User-supplied protos
+
+When your gRPC server doesn't expose reflection or when you want a pinned, deterministic schema, supply the `.proto` source directly.
+
+Lifecycle: **stage → compile → call**, with separate uninstall steps.
+
+```sql
+-- Stage one file per logical .proto
+SELECT grpc_proto_stage('common.proto', $$ ... $$);
+SELECT grpc_proto_stage('auth.proto',   $$ ... $$);
+
+-- Compile everything staged. Resolves cross-imports atomically.
+SELECT grpc_proto_compile();
+
+-- Call any service from any compiled file.
+SELECT grpc_call('localhost:50051', 'auth.AuthService/GetUser', '{"id":"42"}'::jsonb);
+```
+
+### Multi-file imports
+
+`import "common.proto";` resolves against whatever filename you staged — exact-match on the string passed to `grpc_proto_stage`.
+
+```sql
+SELECT grpc_proto_stage('common.proto', $$
+  syntax = "proto3";
+  package auth;
+  message UserId { string id = 1; }
+$$);
+
+SELECT grpc_proto_stage('auth.proto', $$
+  syntax = "proto3";
+  import "common.proto";       -- matches the stage filename above
+  package auth;
+  service AuthService {
+    rpc GetUser(UserId) returns (UserId);
+  }
+$$);
+
+SELECT grpc_proto_compile();
+```
+
+### Well-known types
+
+Google's well-known types — `Timestamp`, `Duration`, `Any`, `StringValue`, etc. — are bundled. `import "google/protobuf/timestamp.proto"` resolves without staging anything extra.
+
+### Failure modes
+
+`grpc_proto_compile()` is all-or-nothing:
+
+| Outcome | Staging   | Registry  |
+| ------- | --------- | --------- |
+| Success | Cleared   | Updated   |
+| Failure | Preserved | Untouched |
+
+Common compile errors:
+
+| Error fragment                              | Cause                                                |
+| ------------------------------------------- | ---------------------------------------------------- |
+| `import "..." not found`                    | The imported filename is not staged.                 |
+| `parse error`                               | Syntax error in the `.proto` body.                   |
+| `field number ... already used`             | Duplicate field tag inside a message.                |
+
+---
+
+## Guide: Large messages
+
+gRPC ships with a hard size cap on every message in both directions.
+
+| Direction         | Default        |
+| ----------------- | -------------- |
+| Decode (response) | **4 MiB**      |
+| Encode (request)  | **unbounded**  |
+
+### Raising the decode cap
+
+```sql
+SELECT grpc_call(
+  'host:port',
+  'pkg.Service/GetLargeThing',
+  '{}'::jsonb,
+  options => '{"max_decode_message_size_bytes": 67108864}'::jsonb  -- 64 MiB
+);
+```
+
+### Setting an encode guardrail
+
+```sql
+SELECT grpc_call(
+  'host:port',
+  'pkg.Service/UploadDocument',
+  big_blob_jsonb,
+  options => '{"max_encode_message_size_bytes": 16777216}'::jsonb  -- 16 MiB cap
+);
+```
+
+### Wire ceiling
+
+Both knobs accept any 32-bit unsigned integer up to **4 294 967 295** (`2^32 - 1`). Asking for more is rejected at parse time.
+
+The decode cap applies to both the unary call and the reflection fetch (they share the same channel).

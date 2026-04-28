@@ -73,6 +73,29 @@ const config: Config = {
         docsRouteBasePath: '/',
       },
     ],
+    // Copy raw .md files to the build output so agents can fetch them at *.md URLs
+    function copyMarkdownForAgents() {
+      return {
+        name: 'copy-markdown-for-agents',
+        async postBuild({outDir}: {outDir: string}) {
+          const docsDir = path.resolve(__dirname, 'docs');
+          async function copyMdFiles(srcDir: string, destDir: string) {
+            await fs.promises.mkdir(destDir, {recursive: true});
+            const entries = await fs.promises.readdir(srcDir, {withFileTypes: true});
+            for (const entry of entries) {
+              const srcPath = path.join(srcDir, entry.name);
+              if (entry.isDirectory()) {
+                await copyMdFiles(srcPath, path.join(destDir, entry.name));
+              } else if (entry.name.endsWith('.md') || entry.name.endsWith('.mdx')) {
+                const destName = entry.name.replace(/\.mdx$/, '.md');
+                await fs.promises.copyFile(srcPath, path.join(destDir, destName));
+              }
+            }
+          }
+          await copyMdFiles(docsDir, outDir);
+        },
+      };
+    },
   ],
 
   themeConfig: {

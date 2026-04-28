@@ -3,6 +3,8 @@ title: User-supplied protos
 sidebar_position: 2
 ---
 
+> For the complete documentation index, see [llms.txt](pathname:///pg_grpc/llms.txt)
+
 # User-supplied protos
 
 When your gRPC server doesn't expose [reflection](https://grpc.io/docs/guides/reflection/) or when you want a pinned, deterministic schema, supply the `.proto` source directly.

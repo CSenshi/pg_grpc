@@ -3,6 +3,8 @@ title: TLS & mTLS
 sidebar_position: 1
 ---
 
+> For the complete documentation index, see [llms.txt](pathname:///pg_grpc/llms.txt)
+
 # TLS & mTLS
 
 Connection security lives inside the `options.tls` JSONB sub-object. Four scenarios are covered, each progressively more restrictive.

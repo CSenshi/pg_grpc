@@ -3,6 +3,8 @@ title: Introduction
 sidebar_position: 1
 ---
 
+> For the complete documentation index, see [llms.txt](pathname:///pg_grpc/llms.txt)
+
 ## How it looks
 
 Define your service in a `.proto`:

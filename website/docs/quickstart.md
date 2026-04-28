@@ -3,6 +3,8 @@ title: Quickstart
 sidebar_position: 3
 ---
 
+> For the complete documentation index, see [llms.txt](pathname:///pg_grpc/llms.txt)
+
 # Quickstart
 
 Two paths, depending on whether your gRPC server exposes [reflection](https://grpc.io/docs/guides/reflection/).

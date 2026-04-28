@@ -5,6 +5,8 @@ toc_min_heading_level: 2
 toc_max_heading_level: 4
 ---
 
+> For the complete documentation index, see [llms.txt](pathname:///pg_grpc/llms.txt)
+
 # Reference
 
 Every SQL function `pg_grpc` exposes, with signatures and defaults. For prose-style explanation, see [Guides](/guides/tls-and-mtls).
