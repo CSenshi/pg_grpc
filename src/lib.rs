@@ -2,6 +2,7 @@ use pgrx::prelude::*;
 
 ::pgrx::pg_module_magic!(name, version);
 
+mod async_schema;
 mod call;
 mod channel_cache;
 mod endpoint;
