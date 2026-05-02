@@ -11,6 +11,7 @@ mod options;
 mod proto;
 mod proto_registry;
 mod proto_staging;
+mod queue;
 mod tls;
 
 #[pg_guard]
