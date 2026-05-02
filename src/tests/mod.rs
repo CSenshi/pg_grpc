@@ -27,4 +27,5 @@ mod tests {
     include!("staging.rs");
     include!("tls.rs");
     include!("queue.rs");
+    include!("worker.rs");
 }

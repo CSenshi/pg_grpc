@@ -7,16 +7,49 @@ mod call;
 mod channel_cache;
 mod endpoint;
 mod error;
+mod guc;
 mod options;
 mod proto;
 mod proto_registry;
 mod proto_staging;
 mod queue;
+mod shmem;
 mod tls;
+mod worker;
 
 #[pg_guard]
 pub extern "C-unwind" fn _PG_init() {
     let _ = rustls::crypto::ring::default_provider().install_default();
+    guc::init();
+    shmem::init();
+    use pgrx::bgworkers::*;
+    use std::time::Duration;
+    BackgroundWorkerBuilder::new("pg_grpc async worker")
+        .set_function("grpc_async_worker")
+        .set_library("pg_grpc")
+        .enable_shmem_access(None)
+        .enable_spi_access()
+        .set_start_time(BgWorkerStartTime::RecoveryFinished)
+        .set_restart_time(Some(Duration::from_secs(1)))
+        .load();
+}
+
+#[pg_extern]
+fn grpc_wait_until_running() {
+    let deadline = 30 * 20; // 30 seconds at 50ms intervals
+    for _ in 0..deadline {
+        if shmem::get_status() == shmem::STATUS_RUNNING {
+            return;
+        }
+        unsafe { pg_sys::pg_usleep(50_000) };
+    }
+    pgrx::error!("pg_grpc async worker did not start within 30 seconds");
+}
+
+#[pg_extern]
+fn grpc_worker_restart() -> bool {
+    unsafe { pg_sys::ProcessConfigFile(pg_sys::GucContext::PGC_SIGHUP) };
+    true
 }
 
 use crate::error::{GrpcError, GrpcResult};
@@ -165,6 +198,9 @@ pub mod pg_test {
 
     #[must_use]
     pub fn postgresql_conf_options() -> Vec<&'static str> {
-        vec![]
+        vec![
+            "shared_preload_libraries = 'pg_grpc'",
+            "pg_grpc.database_name = 'pgrx_tests'",
+        ]
     }
 }
