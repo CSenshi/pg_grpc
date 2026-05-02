@@ -52,6 +52,70 @@ fn grpc_worker_restart() -> bool {
     true
 }
 
+#[pg_extern]
+fn grpc_call_async(
+    endpoint: &str,
+    method: &str,
+    request: pgrx::JsonB,
+    metadata: default!(Option<pgrx::JsonB>, "null"),
+    options: default!(Option<pgrx::JsonB>, "null"),
+) -> i64 {
+    // Validate options at enqueue time — same rules as the sync path.
+    let opts = match &options {
+        None => options::OptionsConfig::default(),
+        Some(pgrx::JsonB(v)) => match options::OptionsConfig::parse(v) {
+            Ok(c) => c,
+            Err(e) => pgrx::error!("{}", e),
+        },
+    };
+    let timeout_ms = opts.timeout_ms.unwrap_or(30_000) as i32;
+
+    let id = Spi::connect_mut(|client| {
+        client
+            .update(
+                "INSERT INTO grpc.call_queue
+                     (endpoint, method, request, metadata, options, timeout_ms)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 RETURNING id",
+                None,
+                &[
+                    endpoint.into(),
+                    method.into(),
+                    request.into(),
+                    metadata.into(),
+                    options.into(),
+                    timeout_ms.into(),
+                ],
+            )
+            .unwrap()
+            .first()
+            .get_one::<i64>()
+            .unwrap()
+            .unwrap()
+    });
+
+    // Register commit-time wake so the worker is signaled only when the
+    // enqueuing transaction actually commits (rolled-back calls never wake it).
+    unsafe {
+        pg_sys::RegisterXactCallback(Some(wake_worker_on_commit), std::ptr::null_mut());
+    }
+
+    id
+}
+
+/// Called by PostgreSQL at transaction commit/abort.  Only signals the worker
+/// on a real commit so rolled-back enqueues never disturb it.
+unsafe extern "C-unwind" fn wake_worker_on_commit(
+    event: pg_sys::XactEvent::Type,
+    _arg: *mut std::ffi::c_void,
+) {
+    if event == pg_sys::XactEvent::XACT_EVENT_COMMIT
+        || event == pg_sys::XactEvent::XACT_EVENT_PARALLEL_COMMIT
+    {
+        shmem::set_latch();
+    }
+}
+
 use crate::error::{GrpcError, GrpcResult};
 
 #[pg_extern]

@@ -28,4 +28,5 @@ mod tests {
     include!("tls.rs");
     include!("queue.rs");
     include!("worker.rs");
+    include!("call_async.rs");
 }
