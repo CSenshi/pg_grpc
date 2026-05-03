@@ -110,14 +110,6 @@ Fetches the result for a previously enqueued call.
 
 When `async = false` the function polls at 50 ms intervals until the result is no longer `PENDING`.  When `async = true` (the default) it returns immediately with whatever status exists at call time.
 
-## `grpc_wait_until_running`
-
-```sql
-grpc_wait_until_running() RETURNS VOID
-```
-
-Blocks until the background worker has started and is ready to process calls, or raises an error after 30 seconds. Useful in tests and migration scripts that need the worker up before enqueueing.
-
 ## Async GUCs
 
 Configured in `postgresql.conf`. Identity GUCs require a server restart; operational GUCs take effect on `SIGHUP` / `SELECT pg_reload_conf()`.

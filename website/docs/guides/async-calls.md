@@ -59,7 +59,7 @@ SELECT status, response
 FROM grpc_call_result(1, async => false);
 ```
 
-This polls internally at 50 ms intervals. Useful in scripts or tests where you want the result inline without writing a loop.
+This polls at 50 ms intervals using a `WaitLatch` timeout. The background worker does not signal the caller's latch when it writes a result, so the wait is purely time-based. Useful in scripts or tests where you want the result inline without writing a loop.
 
 ## With metadata and options
 
@@ -127,7 +127,6 @@ Two unlogged tables are created by the extension:
 | `metadata`   | jsonb      | gRPC headers. `NULL` if not supplied.          |
 | `options`    | jsonb      | Per-call options blob. `NULL` if not supplied. |
 | `timeout_ms` | int        | Resolved at enqueue time from `options`.       |
-| `status`     | text       | `pending` or `processing`.                     |
 
 **`grpc._call_result`** - completed results, cleaned up after `pg_grpc.ttl`.
 
