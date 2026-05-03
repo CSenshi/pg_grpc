@@ -69,6 +69,66 @@ SELECT grpc_call(
 
 Keys ending in `-bin` (binary metadata) are rejected in v1.
 
+## `grpc_call_async`
+
+```sql
+grpc_call_async(
+  endpoint  TEXT,
+  method    TEXT,
+  request   JSONB,
+  metadata  JSONB DEFAULT NULL,
+  options   JSONB DEFAULT NULL
+) RETURNS BIGINT
+```
+
+Enqueues a gRPC call for the background worker and returns the call `id` immediately. The calling transaction does not block on the network. Options are validated at enqueue time using the same rules as `grpc_call`.
+
+See [Async calls](/guides/async-calls) for setup, fan-out patterns and configuration.
+
+## `grpc_call_result`
+
+```sql
+grpc_call_result(
+  id     BIGINT,
+  async  BOOLEAN DEFAULT TRUE
+) RETURNS TABLE (
+  id       BIGINT,
+  status   TEXT,
+  message  TEXT,
+  response JSONB
+)
+```
+
+Fetches the result for a previously enqueued call.
+
+| Column     | Notes                                                                 |
+| ---------- | --------------------------------------------------------------------- |
+| `id`       | The call id.                                                          |
+| `status`   | `PENDING` (not yet finished), `SUCCESS`, or `ERROR`.                  |
+| `message`  | Error string on `ERROR`. `NULL` otherwise.                            |
+| `response` | Decoded response JSONB on `SUCCESS`. `NULL` otherwise.                |
+
+When `async = false` the function polls at 50 ms intervals until the result is no longer `PENDING`.  When `async = true` (the default) it returns immediately with whatever status exists at call time.
+
+## `grpc_wait_until_running`
+
+```sql
+grpc_wait_until_running() RETURNS VOID
+```
+
+Blocks until the background worker has started and is ready to process calls, or raises an error after 30 seconds. Useful in tests and migration scripts that need the worker up before enqueueing.
+
+## Async GUCs
+
+Configured in `postgresql.conf`. Identity GUCs require a server restart; operational GUCs take effect on `SIGHUP` / `SELECT pg_reload_conf()`.
+
+| GUC                     | Type    | Default     | Reload   | Description                                            |
+| ----------------------- | ------- | ----------- | -------- | ------------------------------------------------------ |
+| `pg_grpc.database_name` | string  | `postgres`  | restart  | Database the background worker connects to.            |
+| `pg_grpc.username`      | string  | (superuser) | restart  | Role the worker runs as. `NULL` = bootstrap superuser. |
+| `pg_grpc.batch_size`    | integer | `200`       | SIGHUP   | Max rows dequeued per worker cycle.                    |
+| `pg_grpc.ttl`           | string  | `6 hours`   | SIGHUP   | How long completed results are retained before TTL cleanup. |
+
 ## Proto management
 
 User-supplied proto compilation surface. See [User-supplied protos](/guides/user-supplied-protos) for the lifecycle and worked examples.

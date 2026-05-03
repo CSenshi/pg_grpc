@@ -117,12 +117,12 @@ const config: Config = {
       {property: 'og:image:height', content: '450'},
       {
         property: 'og:image:alt',
-        content: 'pg_grpc — Make gRPC calls directly from PostgreSQL',
+        content: 'pg_grpc - Make gRPC calls directly from PostgreSQL',
       },
       {name: 'twitter:card', content: 'summary_large_image'},
       {
         name: 'twitter:image:alt',
-        content: 'pg_grpc — Make gRPC calls directly from PostgreSQL',
+        content: 'pg_grpc - Make gRPC calls directly from PostgreSQL',
       },
     ],
     colorMode: {

@@ -10,8 +10,9 @@ const sidebars: SidebarsConfig = {
       label: 'Guides',
       collapsed: false,
       items: [
-        'guides/tls-and-mtls',
         'guides/user-supplied-protos',
+        'guides/async-calls',
+        'guides/tls-and-mtls',
         'guides/large-messages',
       ],
     },
