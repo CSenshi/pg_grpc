@@ -32,6 +32,10 @@ pub fn store_latch(latch: *mut pg_sys::Latch) {
     *WORKER_LATCH.exclusive() = latch as u64;
 }
 
+pub fn clear_latch() {
+    *WORKER_LATCH.exclusive() = 0;
+}
+
 pub fn set_latch() {
     let ptr = *WORKER_LATCH.share();
     if ptr != 0 {

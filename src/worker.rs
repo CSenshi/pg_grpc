@@ -4,14 +4,32 @@ use pgrx::prelude::*;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+// Registered via on_proc_exit so it runs even on panic/ereport(ERROR), clearing the
+// latch pointer before this process's PGPROC slot is recycled.
+unsafe extern "C-unwind" fn on_worker_exit(_code: std::os::raw::c_int, _arg: pg_sys::Datum) {
+    // Mark wake pending so the restarted worker drains any rows that were in-flight
+    // when this process died, rather than waiting up to 1 second for the next timeout.
+    shmem::should_wake().store(true, std::sync::atomic::Ordering::Release);
+    shmem::clear_latch();
+}
+
 #[unsafe(no_mangle)]
 #[pg_guard]
 pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
+    // Zero any stale pointer left by a previous incarnation (handles SIGKILL where
+    // on_proc_exit did not run).  Do this before storing MyLatch so callers that race
+    // the startup window see 0 and no-op rather than dereferencing a dead pointer.
+    shmem::clear_latch();
+
     BackgroundWorker::attach_signal_handlers(SignalWakeFlags::SIGHUP | SignalWakeFlags::SIGTERM);
 
     let db = guc::database_name();
     let user = guc::username();
     BackgroundWorker::connect_worker_to_spi(Some(&db), user.as_deref());
+
+    // Register the exit hook before publishing the latch so any subsequent
+    // crash or clean exit always zeros the pointer.
+    unsafe { pg_sys::on_proc_exit(Some(on_worker_exit), pg_sys::Datum::null()) };
 
     unsafe { shmem::store_latch(pg_sys::MyLatch) };
     shmem::set_status(shmem::STATUS_RUNNING);
