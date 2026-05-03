@@ -151,3 +151,129 @@ fn test_ttl_cleanup_removes_expired_rows() {
     .unwrap();
     assert_eq!(count, 0);
 }
+
+fn queue_count() -> i64 {
+    Spi::connect(|client| {
+        client
+            .select("SELECT count(*) FROM grpc.call_queue", None, &[])
+            .unwrap()
+            .first()
+            .get_one::<i64>()
+            .unwrap()
+            .unwrap_or(0)
+    })
+}
+
+// --- queue::count() tests (queue starvation fix) ---
+
+#[pg_test]
+fn test_count_returns_zero_on_empty_queue() {
+    assert_eq!(queue_count(), 0);
+}
+
+#[pg_test]
+fn test_count_returns_queue_depth() {
+    Spi::run(
+        "INSERT INTO grpc.call_queue (endpoint, method, request)
+         VALUES ('host:50051', 'pkg.S/M', '{}'),
+                ('host:50051', 'pkg.S/M', '{}'),
+                ('host:50051', 'pkg.S/M', '{}')",
+    )
+    .unwrap();
+
+    let n = queue_count();
+
+    // Clean up before asserting so we don't leak rows on failure.
+    Spi::run("DELETE FROM grpc.call_queue WHERE endpoint = 'host:50051' AND method = 'pkg.S/M'")
+        .unwrap();
+
+    assert_eq!(n, 3);
+}
+
+#[pg_test]
+fn test_count_decreases_after_partial_dequeue() {
+    Spi::run(
+        "INSERT INTO grpc.call_queue (endpoint, method, request)
+         VALUES ('host:50051', 'pkg.S/M', '{}'),
+                ('host:50051', 'pkg.S/M', '{}'),
+                ('host:50051', 'pkg.S/M', '{}')",
+    )
+    .unwrap();
+
+    let before = queue_count();
+    crate::queue::dequeue(2);
+    let after = queue_count();
+
+    Spi::run("DELETE FROM grpc.call_queue WHERE endpoint = 'host:50051' AND method = 'pkg.S/M'")
+        .unwrap();
+
+    assert_eq!(before, 3);
+    assert_eq!(after, 1);
+}
+
+// Behavioral test: documents the multi-cycle drain contract.
+//
+// When the queue depth exceeds batch_size the worker must run multiple
+// dequeue cycles.  This test simulates two cycles (without real gRPC)
+// and asserts that all enqueued rows end up in _call_result.
+// If the worker loop ever stops re-arming after a full batch this test
+// serves as a specification of the expected drain behavior.
+#[pg_test]
+fn test_queue_is_fully_drained_across_two_cycles() {
+    // Insert 3 rows; simulate a batch_size of 2.
+    Spi::run(
+        "INSERT INTO grpc.call_queue (id, endpoint, method, request)
+         VALUES (7001, 'host:50051', 'pkg.S/M', '{}'),
+                (7002, 'host:50051', 'pkg.S/M', '{}'),
+                (7003, 'host:50051', 'pkg.S/M', '{}')",
+    )
+    .unwrap();
+
+    let batch_size: i32 = 2;
+
+    // Cycle 1: dequeue up to 2 rows; produce fake error results (no network).
+    let first_batch = crate::queue::dequeue(batch_size);
+    assert_eq!(first_batch.len(), 2, "first batch should fill batch_size");
+
+    // A full batch means more rows may remain — count() confirms this.
+    assert_eq!(
+        queue_count(),
+        1,
+        "one row should remain after first batch"
+    );
+
+    crate::queue::insert_results(
+        first_batch
+            .into_iter()
+            .map(|r| crate::queue::CallResult {
+                id: r.id,
+                outcome: crate::queue::CallOutcome::Error("simulated".to_string()),
+            })
+            .collect(),
+    );
+
+    // Cycle 2: drain the remainder.
+    let second_batch = crate::queue::dequeue(batch_size);
+    assert_eq!(second_batch.len(), 1, "second batch should drain the last row");
+    assert_eq!(queue_count(), 0, "queue should be empty after second batch");
+
+    crate::queue::insert_results(
+        second_batch
+            .into_iter()
+            .map(|r| crate::queue::CallResult {
+                id: r.id,
+                outcome: crate::queue::CallOutcome::Error("simulated".to_string()),
+            })
+            .collect(),
+    );
+
+    // All three rows must have a result entry.
+    let result_count = Spi::get_one::<i64>(
+        "SELECT count(*)::bigint FROM grpc._call_result WHERE id IN (7001, 7002, 7003)",
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(result_count, 3, "all rows must have results after two cycles");
+
+    Spi::run("DELETE FROM grpc._call_result WHERE id IN (7001, 7002, 7003)").unwrap();
+}

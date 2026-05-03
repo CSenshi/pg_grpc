@@ -2,7 +2,6 @@ use crate::{call, guc, queue, shmem};
 use pgrx::bgworkers::*;
 use pgrx::prelude::*;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 // Registered via on_proc_exit so it runs even on panic/ereport(ERROR), clearing the
 // latch pointer before this process's PGPROC slot is recycled.
@@ -38,12 +37,12 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
         .build()
         .expect("tokio runtime for async worker");
 
-    while BackgroundWorker::wait_latch(Some(Duration::from_secs(1))) {
+    while BackgroundWorker::wait_latch(None) {
         if BackgroundWorker::sighup_received() {
             unsafe { pg_sys::ProcessConfigFile(pg_sys::GucContext::PGC_SIGHUP) };
         }
 
-        // CAS should_wake true→false; skip batch if nobody signaled since last cycle.
+        // CAS should_wake true→false; skip if nobody signaled since last cycle.
         if shmem::should_wake()
             .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
             .is_err()
@@ -53,45 +52,53 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
 
         let batch_size = guc::batch_size();
 
-        unsafe {
-            pg_sys::SetCurrentStatementStartTimestamp();
-            pg_sys::StartTransactionCommand();
-            pg_sys::PushActiveSnapshot(pg_sys::GetTransactionSnapshot());
-        }
+        // Inner loop: drain the queue completely before returning to idle.
+        // Runs consecutive batches without re-signaling until dequeue returns empty.
+        loop {
+            if BackgroundWorker::sigterm_received() {
+                break;
+            }
 
-        let rows = queue::dequeue(batch_size);
+            unsafe {
+                pg_sys::SetCurrentStatementStartTimestamp();
+                pg_sys::StartTransactionCommand();
+                pg_sys::PushActiveSnapshot(pg_sys::GetTransactionSnapshot());
+            }
 
-        if rows.is_empty() {
+            let rows = queue::dequeue(batch_size);
+
+            if rows.is_empty() {
+                unsafe {
+                    pg_sys::PopActiveSnapshot();
+                    pg_sys::CommitTransactionCommand();
+                }
+                break;
+            }
+
+            // gRPC calls — no database access, transaction sits idle while the network
+            // round-trips complete, exactly as pg_net holds its transaction open during curl.
+            let results: Vec<queue::CallResult> = rt.block_on(async {
+                let mut set = tokio::task::JoinSet::new();
+                for row in rows {
+                    set.spawn(call::call_async_row(row));
+                }
+                let mut out = Vec::new();
+                while let Some(res) = set.join_next().await {
+                    if let Ok(r) = res {
+                        out.push(r);
+                    }
+                }
+                out
+            });
+
+            // Persist results and TTL-clean within the same transaction.
+            queue::insert_results(results);
+            queue::ttl_cleanup(&guc::ttl());
+
             unsafe {
                 pg_sys::PopActiveSnapshot();
                 pg_sys::CommitTransactionCommand();
             }
-            continue;
-        }
-
-        // gRPC calls — no database access, transaction sits idle while the network
-        // round-trips complete, exactly as pg_net holds its transaction open during curl.
-        let results: Vec<queue::CallResult> = rt.block_on(async {
-            let mut set = tokio::task::JoinSet::new();
-            for row in rows {
-                set.spawn(call::call_async_row(row));
-            }
-            let mut out = Vec::new();
-            while let Some(res) = set.join_next().await {
-                if let Ok(r) = res {
-                    out.push(r);
-                }
-            }
-            out
-        });
-
-        // Persist results and TTL-clean within the same transaction.
-        queue::insert_results(results);
-        queue::ttl_cleanup(&guc::ttl());
-
-        unsafe {
-            pg_sys::PopActiveSnapshot();
-            pg_sys::CommitTransactionCommand();
         }
     }
 }
