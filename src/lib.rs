@@ -48,6 +48,14 @@ fn grpc_call_async(
     metadata: default!(Option<pgrx::JsonB>, "null"),
     options: default!(Option<pgrx::JsonB>, "null"),
 ) -> i64 {
+    // Validate endpoint and method at enqueue time — same rules as the sync path.
+    if let Err(e) = endpoint::validate_endpoint(endpoint) {
+        pgrx::error!("{}", e);
+    }
+    if let Err(e) = call::parse_method(method) {
+        pgrx::error!("{}", e);
+    }
+
     // Validate options at enqueue time — same rules as the sync path.
     let opts = match &options {
         None => options::OptionsConfig::default(),
