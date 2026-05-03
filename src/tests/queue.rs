@@ -1,4 +1,15 @@
 #[pg_test]
+fn test_dequeue_on_fresh_transaction_does_not_error() {
+    // No prior write in this transaction — is_xact_still_immutable() returns true,
+    // so pgrx passes read_only=true to SPI_execute. PostgreSQL treats SELECT with a
+    // data-modifying CTE as non-read-only and raises ERROR if read_only=true is passed.
+    // This test verifies that dequeue() uses Spi::connect_mut (read_only=false) so the
+    // UPDATE CTE executes correctly even as the very first operation in a fresh transaction.
+    let rows = crate::queue::dequeue(10);
+    assert_eq!(rows.len(), 0);
+}
+
+#[pg_test]
 fn test_dequeue_returns_queued_row() {
     Spi::run(
         "INSERT INTO grpc.call_queue (endpoint, method, request)

@@ -48,9 +48,9 @@ pub fn dequeue(batch_size: i32) -> Vec<QueueRow> {
          SELECT * FROM updated"
     );
 
-    Spi::connect(|client| {
+    Spi::connect_mut(|client| {
         client
-            .select(&sql, None, &[])
+            .update(&sql, None, &[])
             .unwrap()
             .map(|row| QueueRow {
                 id: row["id"].value::<i64>().unwrap().unwrap(),
