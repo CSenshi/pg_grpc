@@ -67,31 +67,45 @@ pub fn dequeue(batch_size: i32) -> Vec<QueueRow> {
 }
 
 pub fn insert_results(results: Vec<CallResult>) {
-    Spi::connect_mut(|client| {
-        for r in &results {
-            match &r.outcome {
-                CallOutcome::Success(response) => {
-                    client
-                        .update(
-                            "INSERT INTO grpc._call_result (id, status, response)
-                             VALUES ($1, 'SUCCESS', $2)",
-                            None,
-                            &[r.id.into(), pgrx::JsonB(response.clone()).into()],
-                        )
-                        .unwrap();
-                }
-                CallOutcome::Error(msg) => {
-                    client
-                        .update(
-                            "INSERT INTO grpc._call_result (id, status, error_msg)
-                             VALUES ($1, 'ERROR', $2)",
-                            None,
-                            &[r.id.into(), msg.as_str().into()],
-                        )
-                        .unwrap();
-                }
+    if results.is_empty() {
+        return;
+    }
+
+    let mut ids: Vec<i64> = Vec::with_capacity(results.len());
+    let mut statuses: Vec<String> = Vec::with_capacity(results.len());
+    let mut responses: Vec<Option<pgrx::JsonB>> = Vec::with_capacity(results.len());
+    let mut error_msgs: Vec<Option<String>> = Vec::with_capacity(results.len());
+
+    for r in results {
+        ids.push(r.id);
+        match r.outcome {
+            CallOutcome::Success(v) => {
+                statuses.push("SUCCESS".to_string());
+                responses.push(Some(pgrx::JsonB(v)));
+                error_msgs.push(None);
+            }
+            CallOutcome::Error(msg) => {
+                statuses.push("ERROR".to_string());
+                responses.push(None);
+                error_msgs.push(Some(msg));
             }
         }
+    }
+
+    Spi::connect_mut(|client| {
+        client
+            .update(
+                "INSERT INTO grpc._call_result (id, status, response, error_msg)
+                 SELECT * FROM UNNEST($1::bigint[], $2::text[], $3::jsonb[], $4::text[])",
+                None,
+                &[
+                    ids.into(),
+                    statuses.into(),
+                    responses.into(),
+                    error_msgs.into(),
+                ],
+            )
+            .unwrap();
     });
 }
 
