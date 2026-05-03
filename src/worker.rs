@@ -32,7 +32,6 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
     unsafe { pg_sys::on_proc_exit(Some(on_worker_exit), pg_sys::Datum::null()) };
 
     unsafe { shmem::store_latch(pg_sys::MyLatch) };
-    shmem::set_status(shmem::STATUS_RUNNING);
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -78,6 +77,4 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
         queue::insert_results(results);
         queue::ttl_cleanup(&guc::ttl());
     }
-
-    shmem::set_status(shmem::STATUS_EXITED);
 }

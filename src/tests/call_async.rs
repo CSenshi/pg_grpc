@@ -1,6 +1,5 @@
 #[pg_test]
 fn test_call_async_enqueues_row() {
-    crate::grpc_wait_until_running();
     let id = crate::grpc_call_async(
         "grpcb.in:9000",
         "grpcbin.GRPCBin/DummyUnary",
@@ -18,7 +17,6 @@ fn test_call_async_enqueues_row() {
 
 #[pg_test]
 fn test_call_async_rollback_no_row() {
-    crate::grpc_wait_until_running();
     // Use PostgreSQL's internal subtransaction API — SAVEPOINT/ROLLBACK TO SAVEPOINT
     // are rejected by SPI, but BeginInternalSubTransaction works directly.
     unsafe { pg_sys::BeginInternalSubTransaction(std::ptr::null()) };
@@ -40,7 +38,6 @@ fn test_call_async_rollback_no_row() {
 
 #[pg_test]
 fn test_call_async_stores_metadata_and_options() {
-    crate::grpc_wait_until_running();
     let id = crate::grpc_call_async(
         "grpcb.in:9000",
         "grpcbin.GRPCBin/DummyUnary",
@@ -139,7 +136,6 @@ fn test_call_result_returns_error_for_missing_id() {
 
 #[pg_test]
 fn test_e2e_async_success() {
-    crate::grpc_wait_until_running();
     let endpoint = grpcbin_endpoint();
 
     // Enqueue via the public SQL function.
@@ -193,7 +189,6 @@ fn test_e2e_async_success() {
 
 #[pg_test]
 fn test_e2e_async_with_metadata_and_options() {
-    crate::grpc_wait_until_running();
     let endpoint = grpcbin_endpoint();
 
     let id = crate::grpc_call_async(
@@ -236,7 +231,6 @@ fn test_e2e_async_with_metadata_and_options() {
 
 #[pg_test]
 fn test_e2e_async_connection_error() {
-    crate::grpc_wait_until_running();
 
     // Enqueue against an unreachable endpoint with a short timeout.
     let id = crate::grpc_call_async(
@@ -280,7 +274,6 @@ fn test_e2e_async_connection_error() {
 
 #[pg_test]
 fn test_worker_pipeline_processes_grpc_call() {
-    crate::grpc_wait_until_running();
 
     Spi::run(
         "INSERT INTO grpc.call_queue (id, endpoint, method, request)
@@ -322,7 +315,6 @@ fn test_worker_pipeline_processes_grpc_call() {
 
 #[pg_test]
 fn test_worker_pipeline_records_grpc_error() {
-    crate::grpc_wait_until_running();
 
     Spi::run(
         "INSERT INTO grpc.call_queue (id, endpoint, method, request, timeout_ms)

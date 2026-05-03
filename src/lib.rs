@@ -41,18 +41,6 @@ pub extern "C-unwind" fn _PG_init() {
 }
 
 #[pg_extern]
-fn grpc_wait_until_running() {
-    let deadline = 30 * 20; // 30 seconds at 50ms intervals
-    for _ in 0..deadline {
-        if shmem::get_status() == shmem::STATUS_RUNNING {
-            return;
-        }
-        unsafe { pg_sys::pg_usleep(50_000) };
-    }
-    pgrx::error!("pg_grpc async worker did not start within 30 seconds");
-}
-
-#[pg_extern]
 fn grpc_worker_restart() -> bool {
     unsafe { pg_sys::ProcessConfigFile(pg_sys::GucContext::PGC_SIGHUP) };
     true
@@ -155,9 +143,17 @@ fn grpc_call_result(
         loop {
             let r = queue::lookup(id);
             match r.status {
-                queue::LookupStatus::Pending => {
-                    unsafe { pg_sys::pg_usleep(50_000) };
-                }
+                queue::LookupStatus::Pending => unsafe {
+                    pg_sys::WaitLatch(
+                        pg_sys::MyLatch,
+                        (pg_sys::WL_LATCH_SET | pg_sys::WL_TIMEOUT | pg_sys::WL_EXIT_ON_PM_DEATH)
+                            as i32,
+                        50,
+                        pg_sys::PG_WAIT_EXTENSION,
+                    );
+                    pg_sys::ResetLatch(pg_sys::MyLatch);
+                    pg_sys::check_for_interrupts!();
+                },
                 _ => break r,
             }
         }
