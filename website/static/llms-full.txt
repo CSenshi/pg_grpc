@@ -289,6 +289,53 @@ SELECT grpc_call(
 
 Keys ending in `-bin` (binary metadata) are rejected in v1.
 
+### `grpc_call_async`
+
+```sql
+grpc_call_async(
+  endpoint  TEXT,
+  method    TEXT,
+  request   JSONB,
+  metadata  JSONB DEFAULT NULL,
+  options   JSONB DEFAULT NULL
+) RETURNS BIGINT
+```
+
+Enqueues a gRPC call for the background worker and returns the call `id` immediately. The calling transaction does not block on the network. Options are validated at enqueue time using the same rules as `grpc_call`. The worker is signaled only when the enqueuing transaction commits — rolled-back enqueues never wake it.
+
+### `grpc_call_result`
+
+```sql
+grpc_call_result(
+  id     BIGINT,
+  async  BOOLEAN DEFAULT TRUE
+) RETURNS TABLE (
+  id       BIGINT,
+  status   TEXT,
+  message  TEXT,
+  response JSONB
+)
+```
+
+Fetches the result for a previously enqueued call. `status` is `PENDING` (worker hasn't finished), `SUCCESS`, or `ERROR`. When `async = false` the function polls at 50 ms intervals until the result is no longer `PENDING`.
+
+### `grpc_wait_until_running`
+
+```sql
+grpc_wait_until_running() RETURNS VOID
+```
+
+Blocks until the background worker has started, or raises an error after 30 seconds.
+
+### Async GUCs
+
+| GUC                     | Type    | Default     | Reload   | Description                                            |
+| ----------------------- | ------- | ----------- | -------- | ------------------------------------------------------ |
+| `pg_grpc.database_name` | string  | `postgres`  | restart  | Database the background worker connects to.            |
+| `pg_grpc.username`      | string  | (superuser) | restart  | Role the worker runs as. `NULL` = bootstrap superuser. |
+| `pg_grpc.batch_size`    | integer | `200`       | SIGHUP   | Max rows dequeued per worker cycle.                    |
+| `pg_grpc.ttl`           | string  | `6 hours`   | SIGHUP   | How long completed results are retained before TTL cleanup. |
+
 ### Proto management
 
 #### `grpc_proto_stage(filename text, source text)`
@@ -519,3 +566,104 @@ SELECT grpc_call(
 Both knobs accept any 32-bit unsigned integer up to **4 294 967 295** (`2^32 - 1`). Asking for more is rejected at parse time.
 
 The decode cap applies to both the unary call and the reflection fetch (they share the same channel).
+
+---
+
+## Guide: Async calls
+
+`grpc_call` blocks the SQL statement until the gRPC server replies. `grpc_call_async` enqueues the call instead, returning an `id` immediately. A background worker process executes the call and stores the result; you fetch it later with `grpc_call_result`.
+
+Use async when you need to:
+- Fan out many calls in parallel without holding a connection per call.
+- Tolerate slow or unreliable backends without stalling your transaction.
+- Decouple the calling transaction from the network round-trip.
+
+### How it works
+
+1. `grpc_call_async(...)` inserts a row into `grpc.call_queue` and registers a commit callback.
+2. On transaction commit, the callback sets `SHOULD_WAKE = true` and calls `SetLatch` to wake the background worker immediately.
+3. The worker dequeues up to `pg_grpc.batch_size` rows, executes all calls concurrently on a single-threaded async runtime, then writes results to `grpc._call_result`.
+4. Old results are TTL-cleaned (after `pg_grpc.ttl`) in the same cycle.
+
+### Basic usage
+
+```sql
+-- Enqueue. Returns a bigint id immediately.
+SELECT grpc_call_async(
+  'localhost:50051',
+  'auth.AuthService/GetUser',
+  '{"id": "42"}'::jsonb
+);
+-- 1
+
+-- Poll for the result.
+SELECT status, response, message
+FROM grpc_call_result(1);
+--  status  |         response          | message
+-- ---------+---------------------------+---------
+--  SUCCESS | {"id":"42","email":"..."} |
+```
+
+### Blocking wait
+
+```sql
+SELECT status, response
+FROM grpc_call_result(1, async => false);
+```
+
+Polls internally at 50 ms intervals until `status` is no longer `PENDING`.
+
+### Fan-out pattern
+
+```sql
+SELECT grpc_call_async(
+  'localhost:50051',
+  'notify.NotifyService/Send',
+  jsonb_build_object('user_id', user_id)
+)
+FROM users
+WHERE notify_at < now();
+```
+
+All enqueued rows commit together; the worker dequeues them as a batch. Do not insert directly into `grpc.call_queue` — doing so bypasses options validation and never signals the worker.
+
+### Rollback safety
+
+If the enqueuing transaction is rolled back, the queue row is rolled back with it and the worker is never signaled.
+
+### Configuration
+
+Minimal `postgresql.conf`:
+
+```ini
+shared_preload_libraries = 'pg_grpc'
+pg_grpc.database_name = 'mydb'
+pg_grpc.username = 'grpc_worker'
+```
+
+`database_name` and `username` require a server restart. `batch_size` and `ttl` take effect on `SIGHUP` / `SELECT pg_reload_conf()`.
+
+### Schema
+
+**`grpc.call_queue`** — pending and in-flight calls (UNLOGGED).
+
+| Column       | Type       | Notes                                          |
+| ------------ | ---------- | ---------------------------------------------- |
+| `id`         | bigserial  | Primary key; returned by `grpc_call_async`.    |
+| `endpoint`   | text       | `host:port` of the gRPC server.                |
+| `method`     | text       | `pkg.Service/Method`.                          |
+| `request`    | jsonb      | Request body.                                  |
+| `metadata`   | jsonb      | gRPC headers. `NULL` if not supplied.          |
+| `options`    | jsonb      | Per-call options blob. `NULL` if not supplied. |
+| `timeout_ms` | int        | Resolved at enqueue time from `options`.       |
+| `status`     | text       | `pending` or `processing`.                     |
+
+**`grpc._call_result`** — completed results, cleaned up after `pg_grpc.ttl` (UNLOGGED).
+
+| Column      | Type        | Notes                                   |
+| ----------- | ----------- | --------------------------------------- |
+| `id`        | bigint      | Same id as the `call_queue` row.        |
+| `status`    | text        | `SUCCESS` or `ERROR`.                   |
+| `response`  | jsonb       | Decoded response. `NULL` on error.      |
+| `error_msg` | text        | Error string. `NULL` on success.        |
+| `created`   | timestamptz | When the result was stored; TTL anchor. |

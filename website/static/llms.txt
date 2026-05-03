@@ -11,3 +11,4 @@
 - [TLS & mTLS Guide](https://csenshi.github.io/pg_grpc/guides/tls-and-mtls) — Plaintext, OS-trust-store TLS, private CA, mutual TLS, and SNI override
 - [User-supplied protos Guide](https://csenshi.github.io/pg_grpc/guides/user-supplied-protos) — Stage and compile .proto files when server reflection is unavailable
 - [Large messages Guide](https://csenshi.github.io/pg_grpc/guides/large-messages) — Raising decode and encode size limits
+- [Async calls Guide](https://csenshi.github.io/pg_grpc/guides/async-calls) — Non-blocking gRPC calls via a background worker: enqueue, fan-out, result polling, and GUC configuration

@@ -1,18 +1,18 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, { JSX, useEffect, useRef, useState } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './Hero.module.css';
 
 type TabKey = 't1' | 't2' | 't3';
 
-const TABS: {key: TabKey; label: string}[] = [
-  {key: 't1', label: 'reflection'},
-  {key: 't2', label: 'staged proto'},
-  {key: 't3', label: 'async'},
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 't1', label: 'reflection' },
+  { key: 't2', label: 'staged proto' },
+  { key: 't3', label: 'async' },
 ];
 
 export default function Hero(): JSX.Element {
-  const {siteConfig} = useDocusaurusContext();
+  const { siteConfig } = useDocusaurusContext();
   const version = siteConfig.customFields?.version as string;
   const [tab, setTab] = useState<TabKey>('t1');
   const userInteractedRef = useRef(false);
@@ -98,9 +98,8 @@ export default function Hero(): JSX.Element {
                 type="button"
                 role="tab"
                 aria-selected={tab === t.key}
-                className={`${styles.termTab} ${
-                  tab === t.key ? styles.termTabActive : ''
-                }`}
+                className={`${styles.termTab} ${tab === t.key ? styles.termTabActive : ''
+                  }`}
                 onClick={() => handleTab(t.key)}>
                 {t.label}
               </button>
