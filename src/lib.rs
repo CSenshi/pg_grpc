@@ -1,6 +1,12 @@
 use pgrx::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 ::pgrx::pg_module_magic!(name, version);
+
+// True while the current transaction has at least one enqueued call.
+// Ensures RegisterXactCallback is called at most once per transaction,
+// regardless of how many grpc_call_async() calls happen within it.
+static WAKE_CB_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 mod async_schema;
 mod call;
@@ -96,8 +102,12 @@ fn grpc_call_async(
 
     // Register commit-time wake so the worker is signaled only when the
     // enqueuing transaction actually commits (rolled-back calls never wake it).
-    unsafe {
-        pg_sys::RegisterXactCallback(Some(wake_worker_on_commit), std::ptr::null_mut());
+    // The flag prevents registering more than once per transaction even when
+    // grpc_call_async() is called many times within the same transaction.
+    if !WAKE_CB_ACTIVE.swap(true, Ordering::Relaxed) {
+        unsafe {
+            pg_sys::RegisterXactCallback(Some(wake_worker_on_commit), std::ptr::null_mut());
+        }
     }
 
     id
@@ -112,8 +122,17 @@ unsafe extern "C-unwind" fn wake_worker_on_commit(
     if event == pg_sys::XactEvent::XACT_EVENT_COMMIT
         || event == pg_sys::XactEvent::XACT_EVENT_PARALLEL_COMMIT
     {
-        shmem::should_wake().store(true, std::sync::atomic::Ordering::Release);
-        shmem::set_latch();
+        // swap returns the old value: only the one callback that flips true→false
+        // signals the worker.  Accumulated stale nodes from previous transactions
+        // see false and do nothing — matching pg_net's inner wake_commit_cb_active guard.
+        if WAKE_CB_ACTIVE.swap(false, Ordering::Relaxed) {
+            shmem::should_wake().store(true, Ordering::Release);
+            shmem::set_latch();
+        }
+    } else if event == pg_sys::XactEvent::XACT_EVENT_ABORT
+        || event == pg_sys::XactEvent::XACT_EVENT_PARALLEL_ABORT
+    {
+        WAKE_CB_ACTIVE.store(false, Ordering::Relaxed);
     }
 }
 
