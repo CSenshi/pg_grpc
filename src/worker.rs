@@ -21,9 +21,7 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
         .build()
         .expect("tokio runtime for async worker");
 
-    while BackgroundWorker::worker_continue() {
-        BackgroundWorker::wait_latch(Some(Duration::from_secs(1)));
-
+    while BackgroundWorker::wait_latch(Some(Duration::from_secs(1))) {
         if BackgroundWorker::sighup_received() {
             unsafe { pg_sys::ProcessConfigFile(pg_sys::GucContext::PGC_SIGHUP) };
         }
