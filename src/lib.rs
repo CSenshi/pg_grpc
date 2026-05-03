@@ -41,12 +41,6 @@ pub extern "C-unwind" fn _PG_init() {
 }
 
 #[pg_extern]
-fn grpc_worker_restart() -> bool {
-    unsafe { pg_sys::ProcessConfigFile(pg_sys::GucContext::PGC_SIGHUP) };
-    true
-}
-
-#[pg_extern]
 fn grpc_call_async(
     endpoint: &str,
     method: &str,
