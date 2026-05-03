@@ -23,12 +23,11 @@ fn test_dequeue_returns_queued_row() {
     assert_eq!(rows[0].endpoint, "host:50051");
     assert_eq!(rows[0].method, "pkg.S/M");
     assert_eq!(rows[0].request["key"], "val");
-
-    Spi::run("DELETE FROM grpc.call_queue").unwrap();
+    // dequeue uses DELETE ... RETURNING, so the row is already gone from the queue
 }
 
 #[pg_test]
-fn test_dequeue_marks_row_processing_preventing_double_dequeue() {
+fn test_dequeue_removes_row_preventing_double_dequeue() {
     Spi::run(
         "INSERT INTO grpc.call_queue (endpoint, method, request)
          VALUES ('host:50051', 'pkg.S/M', '{}')",
@@ -39,19 +38,18 @@ fn test_dequeue_marks_row_processing_preventing_double_dequeue() {
     let second = crate::queue::dequeue(10);
 
     assert_eq!(first.len(), 1);
-    assert_eq!(second.len(), 0); // already 'processing', not re-dequeued
-
-    Spi::run("DELETE FROM grpc.call_queue").unwrap();
+    assert_eq!(second.len(), 0); // deleted by first dequeue, not visible to second
 }
 
 #[pg_test]
-fn test_insert_results_writes_success_and_removes_from_queue() {
+fn test_insert_results_writes_success() {
     Spi::run(
         "INSERT INTO grpc.call_queue (id, endpoint, method, request)
          VALUES (1001, 'host:50051', 'pkg.S/M', '{}')",
     )
     .unwrap();
-    crate::queue::dequeue(10); // mark as processing
+    // dequeue atomically deletes the row; insert_results only writes to _call_result
+    crate::queue::dequeue(10);
 
     crate::queue::insert_results(vec![crate::queue::CallResult {
         id: 1001,
@@ -63,7 +61,7 @@ fn test_insert_results_writes_success_and_removes_from_queue() {
     )
     .unwrap()
     .unwrap();
-    assert_eq!(queue_count, 0); // removed from queue
+    assert_eq!(queue_count, 0); // removed by dequeue, not by insert_results
 
     let result_status = Spi::get_one::<String>(
         "SELECT status FROM grpc._call_result WHERE id = 1001",

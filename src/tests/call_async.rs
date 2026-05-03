@@ -7,12 +7,12 @@ fn test_call_async_enqueues_row() {
         None,
         None,
     );
-    let status = Spi::get_one::<String>(
-        &format!("SELECT status FROM grpc.call_queue WHERE id = {id}"),
+    let in_queue = Spi::get_one::<i64>(
+        &format!("SELECT count(*)::bigint FROM grpc.call_queue WHERE id = {id}"),
     )
     .unwrap()
-    .unwrap();
-    assert_eq!(status, "pending");
+    .unwrap_or(0);
+    assert_eq!(in_queue, 1);
 }
 
 #[pg_test]
@@ -147,13 +147,13 @@ fn test_e2e_async_success() {
         None,
     );
 
-    // Confirm the row landed in the queue as pending.
-    let status = Spi::get_one::<String>(
-        &format!("SELECT status FROM grpc.call_queue WHERE id = {id}"),
+    // Confirm the row landed in the queue.
+    let in_queue = Spi::get_one::<i64>(
+        &format!("SELECT count(*)::bigint FROM grpc.call_queue WHERE id = {id}"),
     )
     .unwrap()
-    .unwrap();
-    assert_eq!(status, "pending");
+    .unwrap_or(0);
+    assert_eq!(in_queue, 1);
 
     // Simulate the worker: dequeue → execute → persist.
     let rows = crate::queue::dequeue(10);

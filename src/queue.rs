@@ -33,24 +33,19 @@ pub struct LookupResult {
 }
 
 pub fn dequeue(batch_size: i32) -> Vec<QueueRow> {
-    // Modifying CTE via select — UPDATE inside a CTE is valid SQL and works with &SpiClient
-    let sql = format!(
-        "WITH updated AS (
-             UPDATE grpc.call_queue SET status = 'processing'
-             WHERE id IN (
-                 SELECT id FROM grpc.call_queue
-                 WHERE status = 'pending'
-                 ORDER BY id
-                 LIMIT {batch_size}
-             )
-             RETURNING id, endpoint, method, request, metadata, options, timeout_ms
-         )
-         SELECT * FROM updated"
-    );
+    let sql = "WITH rows AS (
+                SELECT id FROM grpc.call_queue ORDER BY id LIMIT $1
+            )
+            DELETE FROM grpc.call_queue q
+            USING rows
+            WHERE q.id = rows.id
+            RETURNING q.id, q.endpoint, q.method, q.request,
+                    q.metadata, q.options, q.timeout_ms";
 
+    // DELETE ... RETURNING atomically consumes the rows
     Spi::connect_mut(|client| {
         client
-            .update(&sql, None, &[])
+            .update(sql, None, &[batch_size.into()])
             .unwrap()
             .map(|row| QueueRow {
                 id: row["id"].value::<i64>().unwrap().unwrap(),
@@ -96,14 +91,6 @@ pub fn insert_results(results: Vec<CallResult>) {
                         .unwrap();
                 }
             }
-        }
-        let ids: Vec<String> = results.iter().map(|r| r.id.to_string()).collect();
-        if !ids.is_empty() {
-            let sql = format!(
-                "DELETE FROM grpc.call_queue WHERE id IN ({})",
-                ids.join(",")
-            );
-            client.update(&sql, None, &[]).unwrap();
         }
     });
 }

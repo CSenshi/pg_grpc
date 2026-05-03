@@ -51,14 +51,26 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
             continue;
         }
 
-        // Transaction 1: dequeue up to batch_size pending rows.
         let batch_size = guc::batch_size();
+
+        unsafe {
+            pg_sys::SetCurrentStatementStartTimestamp();
+            pg_sys::StartTransactionCommand();
+            pg_sys::PushActiveSnapshot(pg_sys::GetTransactionSnapshot());
+        }
+
         let rows = queue::dequeue(batch_size);
+
         if rows.is_empty() {
+            unsafe {
+                pg_sys::PopActiveSnapshot();
+                pg_sys::CommitTransactionCommand();
+            }
             continue;
         }
 
-        // Execute all gRPC calls concurrently on the single-threaded runtime.
+        // gRPC calls — no database access, transaction sits idle while the network
+        // round-trips complete, exactly as pg_net holds its transaction open during curl.
         let results: Vec<queue::CallResult> = rt.block_on(async {
             let mut set = tokio::task::JoinSet::new();
             for row in rows {
@@ -73,8 +85,13 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
             out
         });
 
-        // Transaction 2: persist results and remove processed rows; also TTL cleanup.
+        // Persist results and TTL-clean within the same transaction.
         queue::insert_results(results);
         queue::ttl_cleanup(&guc::ttl());
+
+        unsafe {
+            pg_sys::PopActiveSnapshot();
+            pg_sys::CommitTransactionCommand();
+        }
     }
 }
