@@ -112,11 +112,48 @@ unsafe extern "C-unwind" fn wake_worker_on_commit(
     if event == pg_sys::XactEvent::XACT_EVENT_COMMIT
         || event == pg_sys::XactEvent::XACT_EVENT_PARALLEL_COMMIT
     {
+        shmem::should_wake().store(true, std::sync::atomic::Ordering::Release);
         shmem::set_latch();
     }
 }
 
 use crate::error::{GrpcError, GrpcResult};
+
+#[pg_extern]
+fn grpc_call_result(
+    id: i64,
+    r#async: default!(bool, true),
+) -> TableIterator<
+    'static,
+    (
+        name!(id, i64),
+        name!(status, String),
+        name!(message, Option<String>),
+        name!(response, Option<pgrx::JsonB>),
+    ),
+> {
+    let result = if !r#async {
+        loop {
+            let r = queue::lookup(id);
+            match r.status {
+                queue::LookupStatus::Pending => {
+                    unsafe { pg_sys::pg_usleep(50_000) };
+                }
+                _ => break r,
+            }
+        }
+    } else {
+        queue::lookup(id)
+    };
+
+    let (status, message, response) = match result.status {
+        queue::LookupStatus::Pending => ("PENDING".to_string(), None, None),
+        queue::LookupStatus::Success(v) => ("SUCCESS".to_string(), None, Some(pgrx::JsonB(v))),
+        queue::LookupStatus::Error(msg) => ("ERROR".to_string(), Some(msg), None),
+    };
+
+    TableIterator::new(vec![(result.id, status, message, response)])
+}
 
 #[pg_extern]
 fn grpc_call(

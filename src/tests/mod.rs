@@ -29,4 +29,5 @@ mod tests {
     include!("queue.rs");
     include!("worker.rs");
     include!("call_async.rs");
+    include!("guc.rs");
 }

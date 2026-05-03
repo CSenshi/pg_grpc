@@ -97,6 +97,44 @@ async fn call_async(
     decode_response(method_desc.output(), response_bytes)
 }
 
+/// Executes a single queued gRPC call, returning the outcome.
+/// Used by the background worker to drive concurrent calls via JoinSet.
+pub(crate) async fn call_async_row(row: crate::queue::QueueRow) -> crate::queue::CallResult {
+    let opts = match &row.options {
+        None => crate::options::OptionsConfig::default(),
+        Some(v) => crate::options::OptionsConfig::parse(v).unwrap_or_default(),
+    };
+    // timeout_ms was validated and stored at enqueue time — use it directly.
+    let timeout_ms = row.timeout_ms as u64;
+    let endpoint = row.endpoint.clone();
+    let method = row.method.clone();
+
+    let outcome = match tokio::time::timeout(
+        std::time::Duration::from_millis(timeout_ms),
+        call_async(
+            &endpoint,
+            &method,
+            row.request,
+            opts.use_reflection.unwrap_or(true),
+            row.metadata,
+            opts.tls,
+            opts.max_decode_message_size_bytes,
+            opts.max_encode_message_size_bytes,
+        ),
+    )
+    .await
+    {
+        Ok(Ok(v)) => crate::queue::CallOutcome::Success(v),
+        Ok(Err(e)) => crate::queue::CallOutcome::Error(e.to_string()),
+        Err(_) => crate::queue::CallOutcome::Error(format!("timeout after {timeout_ms}ms")),
+    };
+
+    crate::queue::CallResult {
+        id: row.id,
+        outcome,
+    }
+}
+
 pub(crate) fn parse_method(method: &str) -> GrpcResult<(String, String)> {
     let invalid = || {
         GrpcError::Proto(format!(

@@ -110,7 +110,7 @@ pub fn insert_results(results: Vec<CallResult>) {
 
 pub fn ttl_cleanup(ttl: &str) {
     // ttl comes from a GUC — sanitize by stripping quotes before interpolating
-    let safe_ttl = ttl.replace('\'', "").replace('"', "");
+    let safe_ttl = ttl.replace(['\'', '"'], "");
     Spi::run(&format!(
         "DELETE FROM grpc._call_result WHERE created < now() - INTERVAL '{safe_ttl}'"
     ))
