@@ -4,8 +4,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 ::pgrx::pg_module_magic!(name, version);
 
 // True while the current transaction has at least one enqueued call.
-// Ensures RegisterXactCallback is called at most once per transaction,
-// regardless of how many grpc_call_async() calls happen within it.
 static WAKE_CB_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 mod async_schema;
@@ -28,6 +26,9 @@ pub extern "C-unwind" fn _PG_init() {
     let _ = rustls::crypto::ring::default_provider().install_default();
     guc::init();
     shmem::init();
+    unsafe {
+        pg_sys::RegisterXactCallback(Some(wake_worker_on_commit), std::ptr::null_mut());
+    }
     use pgrx::bgworkers::*;
     use std::time::Duration;
     BackgroundWorkerBuilder::new("pg_grpc async worker")
@@ -94,15 +95,7 @@ fn grpc_call_async(
             .unwrap()
     });
 
-    // Register commit-time wake so the worker is signaled only when the
-    // enqueuing transaction actually commits (rolled-back calls never wake it).
-    // The flag prevents registering more than once per transaction even when
-    // grpc_call_async() is called many times within the same transaction.
-    if !WAKE_CB_ACTIVE.swap(true, Ordering::Relaxed) {
-        unsafe {
-            pg_sys::RegisterXactCallback(Some(wake_worker_on_commit), std::ptr::null_mut());
-        }
-    }
+    WAKE_CB_ACTIVE.store(true, Ordering::Relaxed);
 
     id
 }
