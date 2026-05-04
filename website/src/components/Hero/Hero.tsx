@@ -1,17 +1,18 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, { type JSX, useEffect, useRef, useState } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './Hero.module.css';
 
-type TabKey = 't1' | 't2';
+type TabKey = 't1' | 't2' | 't3';
 
-const TABS: {key: TabKey; label: string}[] = [
-  {key: 't1', label: 'reflection'},
-  {key: 't2', label: 'staged proto'},
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 't1', label: 'reflection' },
+  { key: 't2', label: 'staged proto' },
+  { key: 't3', label: 'async' },
 ];
 
 export default function Hero(): JSX.Element {
-  const {siteConfig} = useDocusaurusContext();
+  const { siteConfig } = useDocusaurusContext();
   const version = siteConfig.customFields?.version as string;
   const [tab, setTab] = useState<TabKey>('t1');
   const userInteractedRef = useRef(false);
@@ -19,7 +20,7 @@ export default function Hero(): JSX.Element {
   useEffect(() => {
     const id = window.setInterval(() => {
       if (userInteractedRef.current) return;
-      setTab((t) => (t === 't1' ? 't2' : 't1'));
+      setTab((t) => (t === 't1' ? 't2' : t === 't2' ? 't3' : 't1'));
     }, 7000);
     return () => window.clearInterval(id);
   }, []);
@@ -97,9 +98,8 @@ export default function Hero(): JSX.Element {
                 type="button"
                 role="tab"
                 aria-selected={tab === t.key}
-                className={`${styles.termTab} ${
-                  tab === t.key ? styles.termTabActive : ''
-                }`}
+                className={`${styles.termTab} ${tab === t.key ? styles.termTabActive : ''
+                  }`}
                 onClick={() => handleTab(t.key)}>
                 {t.label}
               </button>
@@ -107,11 +107,69 @@ export default function Hero(): JSX.Element {
           </div>
 
           <div className={styles.termBody}>
-            {tab === 't1' ? <PaneReflect /> : <PaneStaged />}
+            {tab === 't1' ? <PaneReflect /> : tab === 't2' ? <PaneStaged /> : <PaneAsync />}
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function PaneAsync(): JSX.Element {
+  return (
+    <pre>
+      <span className={styles.tPrompt}>pg_grpc=#</span>{' '}
+      <span className={styles.tComment}>-- Enqueue without blocking.</span>
+      {'\n'}
+      <span className={styles.tPrompt}>pg_grpc=#</span>{' '}
+      <span className={styles.tKw}>SELECT</span>{' '}
+      <span className={styles.tFn}>grpc_call_async</span>({'\n'}
+      <span className={styles.tCont}>pg_grpc-#</span>{'     '}
+      <span className={styles.tStr}>'api.internal:9090'</span>,{'\n'}
+      <span className={styles.tCont}>pg_grpc-#</span>{'     '}
+      <span className={styles.tStr}>'notify.Notifier/Send'</span>,{'\n'}
+      <span className={styles.tCont}>pg_grpc-#</span>{'     '}
+      <span className={styles.tStr}>{`'{"user_id": 42}'`}</span>::
+      <span className={styles.tKw}>jsonb</span>{'\n'}
+      <span className={styles.tCont}>pg_grpc-#</span> );{'\n'}
+      <span className={styles.blank} />{'\n'}
+      <span className={styles.tMeta}>{'  grpc_call_async  '}</span>
+      {'\n'}
+      <span className={styles.tMeta}>{'-------------------'}</span>
+      {'\n'}
+      <span className={styles.tRow}>{'                 1'}</span>
+      {'\n'}
+      <span className={styles.tMeta}>(1 row)</span>
+      {'\n'}
+      <span className={styles.blank} />{'\n'}
+      <span className={styles.tPrompt}>pg_grpc=#</span>{' '}
+      <span className={styles.tComment}>-- Fetch the result.</span>
+      {'\n'}
+      <span className={styles.tPrompt}>pg_grpc=#</span>{' '}
+      <span className={styles.tKw}>SELECT</span> status, response{' '}
+      <span className={styles.tKw}>FROM</span>{' '}
+      <span className={styles.tFn}>grpc_call_result</span>(1);{'\n'}
+      <span className={styles.blank} />{'\n'}
+      <span className={styles.tMeta}>{'  status  |         response         '}</span>
+      {'\n'}
+      <span className={styles.tMeta}>{'----------+--------------------------'}</span>
+      {'\n'}
+      <span className={styles.tRow}>
+        {' SUCCESS  | {'}
+        <span className={styles.tStr}>"ok"</span>
+        {': '}
+        <span className={styles.tStr}>true</span>
+        {', '}
+        <span className={styles.tStr}>"msg_id"</span>
+        {': 7}'}
+      </span>
+      {'\n'}
+      <span className={styles.tMeta}>(1 row)</span>
+      {'\n'}
+      <span className={styles.blank} />{'\n'}
+      <span className={styles.tPrompt}>pg_grpc=#</span>{' '}
+      <span className={styles.tCursor} />
+    </pre>
   );
 }
 

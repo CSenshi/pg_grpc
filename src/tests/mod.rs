@@ -26,4 +26,7 @@ mod tests {
     include!("registry.rs");
     include!("staging.rs");
     include!("tls.rs");
+    include!("queue.rs");
+    include!("call_async.rs");
+    include!("guc.rs");
 }
