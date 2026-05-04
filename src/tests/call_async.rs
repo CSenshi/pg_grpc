@@ -275,11 +275,12 @@ fn test_e2e_async_connection_error() {
 #[pg_test]
 fn test_worker_pipeline_processes_grpc_call() {
 
-    Spi::run(
+    let endpoint = grpcbin_endpoint();
+    Spi::run(&format!(
         "INSERT INTO grpc.call_queue (id, endpoint, method, request)
-         VALUES (20001, 'grpcb.in:9000', 'grpcbin.GRPCBin/DummyUnary',
-                 '{\"f_string\": \"pipeline_test\"}')",
-    )
+         VALUES (20001, '{endpoint}', 'grpcbin.GRPCBin/DummyUnary',
+                 '{{\"f_string\": \"pipeline_test\"}}')",
+    ))
     .unwrap();
 
     // Dequeue the row (SPI sees it — same transaction).
