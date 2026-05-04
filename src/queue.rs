@@ -52,14 +52,8 @@ pub fn dequeue(batch_size: i32) -> Vec<QueueRow> {
                 endpoint: row["endpoint"].value::<String>().unwrap().unwrap(),
                 method: row["method"].value::<String>().unwrap().unwrap(),
                 request: jsonb_to_value(row["request"].value::<pgrx::JsonB>().unwrap()),
-                metadata: row["metadata"]
-                    .value::<pgrx::JsonB>()
-                    .unwrap()
-                    .map(|j| serde_json::from_str(&j.0.to_string()).unwrap()),
-                options: row["options"]
-                    .value::<pgrx::JsonB>()
-                    .unwrap()
-                    .map(|j| serde_json::from_str(&j.0.to_string()).unwrap()),
+                metadata: row["metadata"].value::<pgrx::JsonB>().unwrap().map(|j| j.0),
+                options: row["options"].value::<pgrx::JsonB>().unwrap().map(|j| j.0),
                 timeout_ms: row["timeout_ms"].value::<i32>().unwrap().unwrap(),
             })
             .collect()
@@ -182,6 +176,5 @@ pub fn lookup(id: i64) -> LookupResult {
 }
 
 fn jsonb_to_value(v: Option<pgrx::JsonB>) -> JsonValue {
-    v.map(|j| serde_json::from_str(&j.0.to_string()).unwrap())
-        .unwrap_or(JsonValue::Null)
+    v.map(|j| j.0).unwrap_or(JsonValue::Null)
 }
