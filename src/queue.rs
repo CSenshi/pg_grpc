@@ -111,15 +111,13 @@ pub fn insert_results(results: Vec<CallResult>) {
 
 pub fn ttl_cleanup(ttl: &str) {
     Spi::connect_mut(|client| {
-        client
-            .update(
-                "DELETE FROM grpc._call_result WHERE created < now() - $1::interval",
-                None,
-                &[ttl.into()],
-            )
-            .unwrap_or_else(|e| {
-                pgrx::error!("TTL cleanup failed (pg_grpc.ttl = {:?}): {}", ttl, e)
-            });
+        if let Err(e) = client.update(
+            "DELETE FROM grpc._call_result WHERE created < now() - $1::interval",
+            None,
+            &[ttl.into()],
+        ) {
+            pgrx::warning!("TTL cleanup skipped (pg_grpc.ttl = {:?}): {}", ttl, e);
+        }
     });
 }
 

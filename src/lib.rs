@@ -64,7 +64,11 @@ fn grpc_call_async(
             Err(e) => pgrx::error!("{}", e),
         },
     };
-    let timeout_ms = opts.timeout_ms.unwrap_or(30_000) as i32;
+    let timeout_raw = opts.timeout_ms.unwrap_or(30_000);
+    if timeout_raw > i32::MAX as u64 {
+        pgrx::error!("options.timeout_ms must be <= {}", i32::MAX);
+    }
+    let timeout_ms = timeout_raw as i32;
 
     let id = Spi::connect_mut(|client| {
         client

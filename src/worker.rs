@@ -68,6 +68,7 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
             let rows = queue::dequeue(batch_size);
 
             if rows.is_empty() {
+                queue::ttl_cleanup(&guc::ttl());
                 unsafe {
                     pg_sys::PopActiveSnapshot();
                     pg_sys::CommitTransactionCommand();
