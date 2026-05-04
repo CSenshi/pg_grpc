@@ -102,7 +102,15 @@ async fn call_async(
 pub(crate) async fn call_async_row(row: crate::queue::QueueRow) -> crate::queue::CallResult {
     let opts = match &row.options {
         None => crate::options::OptionsConfig::default(),
-        Some(v) => crate::options::OptionsConfig::parse(v).unwrap_or_default(),
+        Some(v) => match crate::options::OptionsConfig::parse(v) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                return crate::queue::CallResult {
+                    id: row.id,
+                    outcome: crate::queue::CallOutcome::Error(e.to_string()),
+                }
+            }
+        },
     };
     // timeout_ms was validated and stored at enqueue time — use it directly.
     let timeout_ms = row.timeout_ms as u64;
