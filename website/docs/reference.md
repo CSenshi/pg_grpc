@@ -153,7 +153,7 @@ Drops every registered service. Staging untouched.
 
 One row per currently-staged file.
 
-### `grpc_proto_list_registered() returns table(service_name text origin text, filename text, source text, endpoint text)`
+### `grpc_proto_list_registered() returns table(service_name text, origin text, filename text, source text, endpoint text)`
 
 One row per registered service. `origin` is `'user'` (registered via stage+compile) or `'reflection'` (auto-registered on a `grpc_call` cache miss).
 
