@@ -1,6 +1,7 @@
 use crate::{call, guc, queue, shmem};
 use pgrx::bgworkers::*;
 use pgrx::prelude::*;
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 // Registered via on_proc_exit so it runs even on panic/ereport(ERROR), clearing the
@@ -79,14 +80,24 @@ pub extern "C-unwind" fn grpc_async_worker(_arg: pg_sys::Datum) {
             // gRPC calls — no database access, transaction sits idle while the network
             // round-trips complete, exactly as pg_net holds its transaction open during curl.
             let results: Vec<queue::CallResult> = rt.block_on(async {
-                let mut set = tokio::task::JoinSet::new();
+                let mut set: tokio::task::JoinSet<queue::CallResult> = tokio::task::JoinSet::new();
+                let mut ids: HashMap<tokio::task::Id, i64> = HashMap::new();
                 for row in rows {
-                    set.spawn(call::call_async_row(row));
+                    let id = row.id;
+                    let handle = set.spawn(call::call_async_row(row));
+                    ids.insert(handle.id(), id);
                 }
                 let mut out = Vec::new();
-                while let Some(res) = set.join_next().await {
-                    if let Ok(r) = res {
-                        out.push(r);
+                while let Some(res) = set.join_next_with_id().await {
+                    match res {
+                        Ok((_task_id, r)) => out.push(r),
+                        Err(err) => {
+                            let id = ids.get(&err.id()).copied().unwrap_or(0);
+                            out.push(queue::CallResult {
+                                id,
+                                outcome: queue::CallOutcome::Error("task panicked".to_string()),
+                            });
+                        }
                     }
                 }
                 out
