@@ -1,7 +1,7 @@
 #[pg_test]
 fn test_call_async_enqueues_row() {
     let id = crate::grpc_call_async(
-        "grpcb.in:9000",
+        &crate::tests::tests::grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         None,
@@ -21,7 +21,7 @@ fn test_call_async_rollback_no_row() {
     // are rejected by SPI, but BeginInternalSubTransaction works directly.
     unsafe { pg_sys::BeginInternalSubTransaction(std::ptr::null()) };
     let id = crate::grpc_call_async(
-        "grpcb.in:9000",
+        &crate::tests::tests::grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         None,
@@ -39,7 +39,7 @@ fn test_call_async_rollback_no_row() {
 #[pg_test]
 fn test_call_async_stores_metadata_and_options() {
     let id = crate::grpc_call_async(
-        "grpcb.in:9000",
+        &crate::tests::tests::grpcbin_endpoint(),
         "grpcbin.GRPCBin/DummyUnary",
         pgrx::JsonB(serde_json::json!({"f_string": "hello"})),
         Some(pgrx::JsonB(serde_json::json!({"authorization": "Bearer token"}))),
